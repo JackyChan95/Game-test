@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { applyIncome, depotIncome, nextSupply } from '../income';
 import { applyEvent } from '../events';
 import { createRng } from '../rng';
+import { BUNKERS } from '../config';
 import { emptyGame, fixedRng, putBunker } from './helpers';
 
 describe('income', () => {
@@ -65,6 +66,6 @@ describe('events', () => {
     const s = emptyGame();
     putBunker(s, 'enemy', 2, 4, 'wall');
     applyEvent(s, 'sabotage', fixedRng(1));
-    expect(s.lanes[2][4].bunker!.hp).toBe(12);
+    expect(s.lanes[2][4].bunker!.hp).toBe(BUNKERS.wall.hp - 2);
   });
 });

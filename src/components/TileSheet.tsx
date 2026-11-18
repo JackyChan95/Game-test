@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  BUNKERS, UNITS, validateAction,
+  BUNKERS, SIEGE_BONUS, UNITS, escalation, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
@@ -45,12 +45,12 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
 
   const bunkerStats = (k: BunkerKind) => {
     const s = BUNKERS[k];
-    const atk = s.damage === null ? 'no attack' : `d6+${s.damage}, range ${s.range}`;
+    const atk = s.damage === null ? 'no attack' : `${s.damage[0]}–${s.damage[1]} dmg, range ${s.range}`;
     return `${s.hp} HP · ${atk} · ${s.blurb}`;
   };
   const unitStats = (k: UnitKind) => {
     const s = UNITS[k];
-    return `${s.hp} HP · d6+${s.damage}, range ${s.range} · ${s.blurb}`;
+    return `${s.hp} HP · ${s.damage[0]}–${s.damage[1]} dmg, range ${s.range} · ${s.blurb}`;
   };
 
   return (
@@ -108,6 +108,10 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
         )}
 
         <Text style={styles.section}>TRAIN UNIT</Text>
+        <Text style={styles.note}>
+          Units deal +{SIEGE_BONUS} damage to bunkers and bases.
+          {escalation(game.round) > 0 ? ` All attacks +${escalation(game.round)} (escalation).` : ''}
+        </Text>
         {UNIT_KINDS.map((k) => {
           const a: Action = { type: 'trainUnit', lane, col, kind: k };
           return (
@@ -143,6 +147,7 @@ const styles = StyleSheet.create({
   contents: { marginTop: 10, gap: 2 },
   contentLine: { fontSize: 13, fontWeight: '500' },
   section: { fontSize: 10, letterSpacing: 1, color: C.muted, fontWeight: '700', marginTop: 14, marginBottom: 6 },
+  note: { fontSize: 11, color: C.muted, marginTop: -2, marginBottom: 6 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

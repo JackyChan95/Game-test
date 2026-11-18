@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { checkWinner, createGame, gameReducer } from '../engine';
 import { countTiles } from '../board';
+import { MAX_ROUNDS } from '../config';
 import { createRng } from '../rng';
 import type { Action, GameState } from '../types';
 import { emptyGame } from './helpers';
@@ -55,11 +56,11 @@ describe('engine', () => {
     expect(s).toEqual(a.state);
   });
 
-  it('always finishes within 10 rounds', () => {
+  it('always finishes by the last round', () => {
     for (let i = 0; i < 30; i++) {
       const { state } = playRandom(`seed-${i}`, i);
       expect(state.phase).toBe('gameOver');
-      expect(state.round).toBeLessThanOrEqual(10);
+      expect(state.round).toBeLessThanOrEqual(MAX_ROUNDS);
       expect(state.result).not.toBeNull();
     }
   });
@@ -77,9 +78,9 @@ describe('engine', () => {
     expect(s.replay).toEqual([]);
   });
 
-  it('decides by tiles, then base HP, after round 10', () => {
+  it('decides by tiles, then base HP, after the last round', () => {
     const s = emptyGame();
-    s.round = 10;
+    s.round = MAX_ROUNDS;
     expect(checkWinner(s)?.winner).toBe('draw');
     s.players.enemy.baseHp = 15;
     expect(checkWinner(s)?.winner).toBe('player');

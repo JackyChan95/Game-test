@@ -26,11 +26,16 @@ export function putBunker(s: GameState, side: Side, lane: number, col: number, k
   s.lanes[lane][col].owner = side;
 }
 
-/** Fake RNG that always rolls the given die value. */
+/** Fake RNG: dice always show `die`; ranged rolls give min + die - 1, capped at max. */
 export const fixedRng = (die: number) => ({
   next: () => (die - 1) / 6,
-  int: (min: number) => min + die - 1,
+  int: (min: number, max: number) => Math.min(max, min + die - 1),
   d6: () => die,
   pick: <T,>(xs: readonly T[]) => xs[0],
   state: () => 0,
 });
+
+/** Rolls the bottom of every damage range. */
+export const lowRng = fixedRng(1);
+/** Rolls the top of every damage range. */
+export const highRng = fixedRng(99);

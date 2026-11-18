@@ -8,8 +8,8 @@ const RULES = [
   'Three lanes, five tiles each. Your base is on the left.',
   'Each round you roll 2d6 for supply (carries over, max 15).',
   'Tap a tile to build bunkers or train units. Units train on your home column or on tiles with your bunker.',
-  'End the turn: units advance one tile, then everything in range attacks (1d6 + modifier).',
-  'Destroy the AI base (20 HP), or hold more tiles after round 10.',
+  'End the turn: units advance one tile, then everything in range attacks. Each piece has a damage range, like 2–4.',
+  'Destroy the AI base (20 HP) to win. Fights escalate over time; if both bases survive 20 rounds, more tiles wins.',
 ];
 
 export function NewGameScreen({ onStart }: { onStart: (seed: string) => void }) {

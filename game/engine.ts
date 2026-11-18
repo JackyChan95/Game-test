@@ -2,14 +2,14 @@
  * Top-level game flow. `gameReducer` is the single entry point the UI uses:
  * it never mutates its input and is fully deterministic given the seed.
  */
-import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
+import { BASE_HP, COLS, ESCALATION_ROUNDS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
 import { clone, countTiles, pushLog } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, trainUnit, upgradeBunker,
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
-import { resolveClash, type Attack } from './combat';
+import { escalation, resolveClash, type Attack } from './combat';
 import { runAiTurn } from './ai';
 import { createRng, seedFrom, type Rng } from './rng';
 import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame } from './types';
@@ -29,6 +29,9 @@ function startRound(state: GameState, rng: Rng) {
   pushLog(state, `Income: you rolled ${p.dice.join('+')}${p.bonus ? ` +${p.bonus}` : ''}, AI rolled ${e.dice.join('+')}${e.bonus ? ` +${e.bonus}` : ''}.`);
   state.event = drawEvent(rng);
   applyEvent(state, state.event, rng);
+  if (ESCALATION_ROUNDS.includes(state.round)) {
+    pushLog(state, `Escalation: all attacks now deal +${escalation(state.round)} damage.`);
+  }
 }
 
 export function createGame(seed: string): GameState {

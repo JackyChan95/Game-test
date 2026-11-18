@@ -7,10 +7,11 @@
  *
  * Attacks: every unit and armed bunker picks the nearest enemy in its lane
  * within range (a bunker on a tile is hit before the units sheltering in it,
- * the base is hit when nothing closer is in range). Damage = 1d6 + modifier,
- * minimum 1. All damage is applied at once, then the dead are removed.
+ * the base is hit when nothing closer is in range). Damage is rolled within the
+ * attacker's range (e.g. 2–3), minimum 1. All damage is applied at once, then
+ * the dead are removed.
  */
-import { BASE_COL, BUNKERS, COLS, DIR, UNITS, UNITS_PER_TILE } from './config';
+import { BASE_COL, BUNKERS, COLS, DIR, ESCALATION_ROUNDS, SIEGE_BONUS, UNITS, UNITS_PER_TILE } from './config';
 import { other, pushLog } from './board';
 import type { GameState, Side } from './types';
 import type { Rng } from './rng';
@@ -23,7 +24,10 @@ export type Target =
 export interface Attack {
   attacker: string;
   target: Target;
-  roll: number;
+  /** The attacker's damage range for this attack, before any event penalty. */
+  min: number;
+  max: number;
+  /** Event penalty applied to the roll (e.g. -1 in a blizzard). */
   modifier: number;
   damage: number;
 }
@@ -78,12 +82,18 @@ export function moveUnits(state: GameState, first: Side) {
 
 const NAME = (side: Side, name: string) => `${side === 'player' ? 'Your' : 'AI'} ${name}`;
 
+/** Damage bonus every attack gets in this round from escalation. */
+export const escalation = (round: number) => ESCALATION_ROUNDS.filter((r) => round >= r).length;
+
 export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): Attack[] {
   const attacks: Attack[] = [];
-  const add = (attacker: string, target: Target, base: number, ranged: boolean) => {
-    const roll = rng.d6();
-    const modifier = base - (blizzard && ranged ? 1 : 0);
-    attacks.push({ attacker, target, roll, modifier, damage: Math.max(1, roll + modifier) });
+  const esc = escalation(state.round);
+  const add = (attacker: string, target: Target, [lo, hi]: [number, number], ranged: boolean) => {
+    const min = lo + esc;
+    const max = hi + esc;
+    const modifier = blizzard && ranged ? -1 : 0;
+    const damage = Math.max(1, rng.int(min, max) + modifier);
+    attacks.push({ attacker, target, min, max, modifier, damage });
   };
   state.lanes.forEach((lane, l) =>
     lane.forEach((tile, c) => {
@@ -92,14 +102,17 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
         const s = BUNKERS[b.kind];
         if (s.damage !== null) {
           const target = findTarget(state, b.owner, l, c, s.range, [DIR[b.owner], -DIR[b.owner]]);
-          const mod = s.damage + (b.upgraded ? s.upgradeDamage : 0);
-          if (target) add(`${NAME(b.owner, s.name)} (L${l + 1})`, target, mod, s.range >= 2);
+          const up = b.upgraded ? s.upgradeDamage : 0;
+          const range: [number, number] = [s.damage[0] + up, s.damage[1] + up];
+          if (target) add(`${NAME(b.owner, s.name)} (L${l + 1})`, target, range, s.range >= 2);
         }
       }
       for (const u of tile.units) {
         const s = UNITS[u.kind];
         const target = findTarget(state, u.owner, l, c, s.range, [DIR[u.owner]]);
-        if (target) add(`${NAME(u.owner, s.name)} (L${l + 1})`, target, s.damage, s.range >= 2);
+        const siege = target && target.type !== 'unit' ? SIEGE_BONUS : 0;
+        const range: [number, number] = [s.damage[0] + siege, s.damage[1] + siege];
+        if (target) add(`${NAME(u.owner, s.name)} (L${l + 1})`, target, range, s.range >= 2);
       }
     }),
   );
@@ -124,8 +137,8 @@ export function applyAttacks(state: GameState, attacks: Attack[]) {
 export function applyDamage(state: GameState, attacks: Attack[]) {
   for (const a of attacks) {
     const t = a.target;
-    const mod = a.modifier >= 0 ? `+${a.modifier}` : `${a.modifier}`;
-    pushLog(state, `${a.attacker} → ${describe(state, t)}: ${a.damage} (${a.roll}${mod})`);
+    const penalty = a.modifier ? `, ${a.modifier} blizzard` : '';
+    pushLog(state, `${a.attacker} → ${describe(state, t)}: ${a.damage} (${a.min}–${a.max}${penalty})`);
     if (t.type === 'base') state.players[t.side].baseHp -= a.damage;
     else if (t.type === 'bunker') {
       const b = state.lanes[t.lane][t.col].bunker;
