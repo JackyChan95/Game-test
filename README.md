@@ -1,0 +1,100 @@
+# Bunker Lanes
+
+A short, turn-based lane strategy game for one player against a simple AI.
+Built with Expo (SDK 58), React Native and TypeScript.
+
+## Run it
+
+```bash
+npm install
+npx expo start        # then scan the QR code with Expo Go, or press a / i / w
+npm test              # unit tests for the game logic
+npm run typecheck
+```
+
+## Rules
+
+**Map.** 3 lanes × 5 tiles. Your base is on the left, the AI's on the right, and each base has 20 HP.
+A tile holds one bunker and up to 2 units. At the start you hold the 2 columns nearest your base,
+the AI holds its 2, and the middle column belongs to nobody.
+
+**Each round:**
+
+1. **Income.** Each side rolls 2d6 and adds +1 for each Depot (+2 if the Depot is upgraded). Unspent supply carries over, capped at 15.
+2. **Event.** One random event is drawn (see below).
+3. **Build.** You build, upgrade and train. Then the AI does the same.
+4. **Clash.**
+   - *Movement.* Every unit advances one tile toward the enemy base. A unit stays put if it already
+     has a target in range, if the next tile holds an enemy unit or enemy bunker, or if the next tile
+     already has 2 friendly units. A unit that moves onto a tile claims it.
+   - *Attacks.* Every unit and Turret hits the nearest enemy in its lane within range. A bunker is hit
+     before the units sheltering on its tile. The base is hit when nothing closer is in range. Each
+     attack rolls 1d6 and adds the attacker's modifier (minimum 1 damage). All attacks land at the
+     same time, then anything at 0 HP is removed.
+   - Who moves first alternates each round: you move first on odd rounds, the AI on even rounds.
+5. **Win check.**
+
+**Where you can build.** You can put a bunker on any tile you hold that has no bunker.
+You can train units on your home column (column 1) or on any tile with one of your bunkers,
+so bunkers act as forward spawn points.
+
+| Bunker | Cost | HP | Attack | Upgrade (once) |
+|---|---|---|---|---|
+| Wall   | 2 | 14 | none | 2 supply: +6 HP |
+| Turret | 4 | 8  | d6+0, range 2 (both directions) | 3 supply: +4 HP, +1 damage |
+| Depot  | 6 | 5  | none, gives +1 supply/round | 3 supply: +3 HP, +1 supply/round |
+
+| Unit | Cost | HP | Attack |
+|---|---|---|---|
+| Grunt  | 2 | 6  | d6+0, melee (range 1) |
+| Sniper | 3 | 4  | d6+1, range 2 |
+| Brute  | 5 | 12 | d6+2, melee (range 1) |
+
+The Depot has no attack, so its upgrade adds income where other bunkers gain damage.
+
+**Events** (each equally likely):
+
+- **Supply Drop:** both sides get +3 supply (still capped at 15).
+- **Blizzard:** ranged attacks (Snipers, Turrets) deal −1 this round.
+- **Mercenary Offer:** the side with less supply gets a free Brute (nobody gets it on a tie).
+- **Sabotage:** a random bunker on the board takes 2 damage.
+- **Calm:** nothing happens.
+
+**Winning.** You win by destroying the enemy base. If no base has fallen after round 10, the side holding
+more tiles wins, and base HP breaks a tie. If both bases fall in the same round, the same
+tiles-then-HP comparison decides.
+
+**AI.** The AI is rule-based. Each step it picks a focus lane, which is the lane where the player's
+force (weighted toward pieces close to the AI base) most outweighs its own, and where the player holds tiles. In order, it then tries to:
+build one early Depot, defend a lane the player is pushing, keep about one bunker per three units,
+train units, and upgrade bunkers. It repeats until it can't afford anything, so it spends nearly
+all its supply each turn.
+
+**Replays.** All randomness, including the AI's, comes from a seeded RNG stored in the game state. The same seed plus
+the same moves always replays the same game. The results screen shows the seed and has a Rematch button.
+
+## File structure
+
+```
+App.tsx                  Screen switching (new game → game → results)
+game/                    Pure game logic, no React imports
+  types.ts               GameState, Tile, Unit, Bunker, Action…
+  config.ts              All tunable numbers: costs, HP, damage, events
+  rng.ts                 Seeded RNG (mulberry32) + string → seed hashing
+  board.ts               Small helpers (clone, tile counting, logging)
+  build.ts               Build-phase validation and actions
+  income.ts              2d6 + depot income, supply cap
+  events.ts              Random events
+  combat.ts              Movement, targeting, simultaneous attacks
+  ai.ts                  Rule-based opponent
+  engine.ts              createGame, gameReducer, checkWinner
+  __tests__/             Jest tests (combat, income/events, engine)
+src/
+  useGame.ts             React hook wrapping the pure reducer
+  theme.ts               Muted palette
+  components/            TopBar, Board, DiceTray, Die, TileSheet, CombatLog, Button
+  screens/               NewGameScreen, GameScreen, ResultsScreen
+```
+
+`gameReducer(state, action)` is the only entry point the UI uses. It clones the state, applies the
+action and returns a new state, so the logic can be tested without any UI.
