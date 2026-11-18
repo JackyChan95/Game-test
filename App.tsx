@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
@@ -12,21 +12,17 @@ export default function App() {
   const { game, start, dispatch, quit } = useGame();
   const [showResults, setShowResults] = useState(false);
 
-  // When the game ends, leave the final board up briefly before the results.
+  // Back to the board whenever a new game starts.
   useEffect(() => {
-    if (game?.phase !== 'gameOver') {
-      setShowResults(false);
-      return;
-    }
-    const t = setTimeout(() => setShowResults(true), 1400);
-    return () => clearTimeout(t);
+    if (game?.phase !== 'gameOver') setShowResults(false);
   }, [game?.phase]);
+  const onGameOver = useCallback(() => setShowResults(true), []);
 
   let screen;
   if (!game) screen = <NewGameScreen onStart={start} />;
   else if (showResults) {
     screen = <ResultsScreen game={game} onRematch={() => start(game.seed)} onNewGame={quit} />;
-  } else screen = <GameScreen game={game} dispatch={dispatch} onQuit={quit} />;
+  } else screen = <GameScreen game={game} dispatch={dispatch} onQuit={quit} onGameOver={onGameOver} />;
 
   return (
     <SafeAreaProvider>

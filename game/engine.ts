@@ -9,10 +9,10 @@ import {
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
-import { resolveClash } from './combat';
+import { resolveClash, type Attack } from './combat';
 import { runAiTurn } from './ai';
 import { createRng, seedFrom, type Rng } from './rng';
-import type { Action, GameResult, GameState, Side, Tile } from './types';
+import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame } from './types';
 
 function initialOwner(col: number): Side | null {
   if (col < 2) return 'player';
@@ -50,6 +50,7 @@ export function createGame(seed: string): GameState {
     log: [],
     nextId: 1,
     result: null,
+    replay: [],
   };
   const rng = createRng(state.rngState);
   startRound(state, rng);
@@ -95,9 +96,28 @@ export function validateAction(state: GameState, action: Action): string | null 
 }
 
 /** End the player's turn: AI builds, clash, win check, next round. Mutates state. */
+function snapshot(state: GameState, stage: TurnFrame['stage'], attacks: Attack[] = []): TurnFrame {
+  const hits = new Map<string, Hit>();
+  for (const a of attacks) {
+    const t = a.target;
+    const key = t.type === 'base' ? `base-${t.side}` : t.type === 'unit' ? `unit-${t.id}` : `bunker-${t.lane}-${t.col}`;
+    const hit = hits.get(key) ?? {
+      unitId: t.type === 'unit' ? t.id : null,
+      lane: t.type === 'base' ? null : t.lane,
+      col: t.type === 'base' ? null : t.col,
+      base: t.type === 'base' ? t.side : null,
+      damage: 0,
+    };
+    hit.damage += a.damage;
+    hits.set(key, hit);
+  }
+  return { stage, round: state.round, lanes: clone(state.lanes), players: clone(state.players), hits: [...hits.values()] };
+}
+
 function endTurn(state: GameState, rng: Rng) {
   runAiTurn(state, rng);
-  resolveClash(state, rng);
+  state.replay.push(snapshot(state, 'aiBuild'));
+  resolveClash(state, rng, (stage, attacks) => state.replay.push(snapshot(state, stage, attacks)));
   const result = checkWinner(state);
   if (result) {
     state.result = result;
@@ -112,6 +132,7 @@ function endTurn(state: GameState, rng: Rng) {
 export function gameReducer(state: GameState, action: Action): GameState {
   if (validateAction(state, action)) return state;
   const next = clone(state);
+  next.replay = [];
   const rng = createRng(next.rngState);
   switch (action.type) {
     case 'buildBunker':

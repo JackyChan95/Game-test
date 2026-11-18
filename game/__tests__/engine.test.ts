@@ -64,6 +64,19 @@ describe('engine', () => {
     }
   });
 
+  it('records AI build, move and attack frames on end turn', () => {
+    let s = createGame('frames');
+    s = gameReducer(s, { type: 'trainUnit', lane: 0, col: 0, kind: 'grunt' });
+    expect(s.replay).toEqual([]);
+    s = gameReducer(s, { type: 'endTurn' });
+    expect(s.replay.map((f) => f.stage)).toEqual(['aiBuild', 'move', 'attack']);
+    // The grunt trained at column 1 has advanced in the move frame.
+    expect(s.replay[0].lanes[0][0].units[0].kind).toBe('grunt');
+    expect(s.replay[1].lanes[0][1].units[0].kind).toBe('grunt');
+    s = gameReducer(s, { type: 'trainUnit', lane: 1, col: 0, kind: 'grunt' });
+    expect(s.replay).toEqual([]);
+  });
+
   it('decides by tiles, then base HP, after round 10', () => {
     const s = emptyGame();
     s.round = 10;

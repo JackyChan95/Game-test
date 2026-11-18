@@ -116,6 +116,12 @@ function describe(state: GameState, t: Target): string {
 
 /** Apply attacks simultaneously, then remove anything at 0 HP. */
 export function applyAttacks(state: GameState, attacks: Attack[]) {
+  applyDamage(state, attacks);
+  removeDestroyed(state);
+}
+
+/** Subtract damage from every target. Pieces at 0 HP stay on the board until removeDestroyed. */
+export function applyDamage(state: GameState, attacks: Attack[]) {
   for (const a of attacks) {
     const t = a.target;
     const mod = a.modifier >= 0 ? `+${a.modifier}` : `${a.modifier}`;
@@ -129,6 +135,10 @@ export function applyAttacks(state: GameState, attacks: Attack[]) {
       if (u) u.hp -= a.damage;
     }
   }
+}
+
+/** Remove units and bunkers at 0 HP, and clamp base HP at 0. */
+export function removeDestroyed(state: GameState) {
   state.lanes.forEach((lane, l) =>
     lane.forEach((tile) => {
       for (const u of tile.units) {
@@ -146,13 +156,19 @@ export function applyAttacks(state: GameState, attacks: Attack[]) {
   }
 }
 
+/** Called after each stage of the clash so the UI can animate it. */
+export type ClashObserver = (stage: 'move' | 'attack', attacks: Attack[]) => void;
+
 /** Full clash: move, then fight. Mutates state. */
-export function resolveClash(state: GameState, rng: Rng) {
+export function resolveClash(state: GameState, rng: Rng, observe?: ClashObserver) {
   pushLog(state, `— Clash, round ${state.round} —`);
   // Alternate who moves first so neither side has a permanent edge.
   const first: Side = state.round % 2 === 1 ? 'player' : 'enemy';
   moveUnits(state, first);
+  observe?.('move', []);
   const attacks = collectAttacks(state, rng, state.event === 'blizzard');
   if (attacks.length === 0) pushLog(state, 'No contact this round.');
-  applyAttacks(state, attacks);
+  applyDamage(state, attacks);
+  observe?.('attack', attacks);
+  removeDestroyed(state);
 }

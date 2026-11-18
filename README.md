@@ -92,9 +92,14 @@ game/                    Pure game logic, no React imports
 src/
   useGame.ts             React hook wrapping the pure reducer
   theme.ts               Muted palette
-  components/            TopBar, Board, DiceTray, Die, TileSheet, CombatLog, Button
+  components/            TopBar, Board, DiceTray, Die, Icons, TileSheet, CombatLog, Button
   screens/               NewGameScreen, GameScreen, ResultsScreen
 ```
+
+**Turn animation.** On End Turn the engine also saves a board snapshot after each stage
+(AI builds, units advance, combat) in `state.replay`, with the damage dealt per target. The game
+screen plays these back before showing the new round: new pieces pop in, units slide one tile, and
+damage numbers float over their targets. Tap the board to skip.
 
 `gameReducer(state, action)` is the only entry point the UI uses. It clones the state, applies the
 action and returns a new state, so the logic can be tested without any UI.

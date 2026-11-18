@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BUNKERS, UNITS, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
+import { BunkerIcon, UnitIcon } from './Icons';
 
 interface Props {
   game: GameState;
@@ -14,8 +16,8 @@ interface Props {
 }
 
 function Option({
-  title, detail, cost, reason, onPress,
-}: { title: string; detail: string; cost: number; reason: string | null; onPress: () => void }) {
+  title, detail, cost, reason, onPress, icon,
+}: { title: string; detail: string; cost: number; reason: string | null; onPress: () => void; icon: ReactNode }) {
   const disabled = reason !== null;
   return (
     <Pressable
@@ -23,6 +25,7 @@ function Option({
       onPress={onPress}
       style={({ pressed }) => [styles.option, disabled && styles.optionDisabled, pressed && styles.optionPressed]}
     >
+      <View style={[styles.optionIcon, disabled && { opacity: 0.4 }]}>{icon}</View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.optionTitle, disabled && styles.dim]}>{title}</Text>
         <Text style={styles.optionDetail}>{disabled ? reason : detail}</Text>
@@ -85,6 +88,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
               title={`Upgrade ${BUNKERS[b.kind].name}`}
               detail={`+${BUNKERS[b.kind].upgradeHp} HP${BUNKERS[b.kind].upgradeDamage ? `, +${BUNKERS[b.kind].upgradeDamage} damage` : ''}${BUNKERS[b.kind].upgradeIncome ? `, +${BUNKERS[b.kind].upgradeIncome} supply/round` : ''}`}
               cost={BUNKERS[b.kind].upgradeCost}
+              icon={<BunkerIcon kind={b.kind} color={C.player} detail={C.bg} size={22} />}
               reason={validateAction(game, { type: 'upgradeBunker', lane, col })}
               onPress={() => onAction({ type: 'upgradeBunker', lane, col })}
             />
@@ -96,6 +100,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
               const a: Action = { type: 'buildBunker', lane, col, kind: k };
               return (
                 <Option key={k} title={BUNKERS[k].name} detail={bunkerStats(k)} cost={BUNKERS[k].cost}
+                  icon={<BunkerIcon kind={k} color={C.player} detail={C.bg} size={22} />}
                   reason={validateAction(game, a)} onPress={() => onAction(a)} />
               );
             })}
@@ -107,6 +112,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
           const a: Action = { type: 'trainUnit', lane, col, kind: k };
           return (
             <Option key={k} title={UNITS[k].name} detail={unitStats(k)} cost={UNITS[k].cost}
+              icon={<UnitIcon kind={k} color={C.player} detail={C.bg} size={22} />}
               reason={validateAction(game, a)} onPress={() => onAction(a)} />
           );
         })}
@@ -148,6 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     backgroundColor: C.bg,
   },
+  optionIcon: { width: 26, marginRight: 10, alignItems: 'center' },
   optionDisabled: { backgroundColor: 'transparent' },
   optionPressed: { backgroundColor: C.neutral },
   optionTitle: { fontSize: 14, fontWeight: '600', color: C.ink },

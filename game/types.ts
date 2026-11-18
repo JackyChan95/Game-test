@@ -39,6 +39,28 @@ export interface DiceRoll {
   total: number;
 }
 
+/** A damage number to show during the turn animation. */
+export interface Hit {
+  /** Unit id, or null for a bunker or base hit. */
+  unitId: number | null;
+  lane: number | null;
+  col: number | null;
+  /** Set for base hits. */
+  base: Side | null;
+  damage: number;
+}
+
+/** Board snapshot after one stage of the end-of-turn sequence. */
+export interface TurnFrame {
+  stage: 'aiBuild' | 'move' | 'attack';
+  /** The round being resolved. */
+  round: number;
+  lanes: Tile[][];
+  players: Record<Side, PlayerState>;
+  /** Damage dealt in this stage, summed per target. */
+  hits: Hit[];
+}
+
 export type Phase = 'build' | 'gameOver';
 
 export interface GameResult {
@@ -61,6 +83,8 @@ export interface GameState {
   log: string[];
   nextId: number;
   result: GameResult | null;
+  /** Snapshots of the last end-of-turn sequence, for the UI to replay. Empty otherwise. */
+  replay: TurnFrame[];
 }
 
 export type Action =

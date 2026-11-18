@@ -4,9 +4,23 @@ import { C } from '../theme';
 import { Die } from './Die';
 
 /** Income dice for the current round plus the round's event. */
-export function DiceTray({ game, rollKey }: { game: GameState; rollKey: number }) {
+export function DiceTray({ game, rollKey, caption }: { game: GameState; rollKey: number; caption?: string }) {
   const [p, e] = game.rolls;
   const ev = EVENTS[game.event];
+  if (caption) {
+    return (
+      <View style={styles.tray}>
+        <View style={styles.rolls}>
+          <Text style={styles.caption}>{caption}</Text>
+          <Text style={styles.small}>Tap board to skip</Text>
+        </View>
+        <View style={[styles.event, { opacity: 0 }]}>
+          <Text style={styles.eventName}> </Text>
+          <Text style={styles.eventText}> </Text>
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={styles.tray}>
       <View style={styles.rolls}>
@@ -44,6 +58,7 @@ const styles = StyleSheet.create({
   rolls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 32 },
   roll: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rollText: { fontSize: 16, fontWeight: '600', color: C.ink, marginLeft: 4 },
+  caption: { fontSize: 15, fontWeight: '600', color: C.ink, letterSpacing: 0.2 },
   small: { fontSize: 11, color: C.muted, fontWeight: '400' },
   event: {
     borderLeftWidth: 2,
