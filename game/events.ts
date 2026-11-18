@@ -1,5 +1,5 @@
-import { BUNKERS, EVENTS, EVENT_KINDS, HOME_COL, UNITS_PER_TILE } from './config';
-import { addSupply, allBunkers, pushLog, SIDE } from './board';
+import { BUNKERS, EVENTS, EVENT_KINDS, HOME_COL } from './config';
+import { addSupply, allBunkers, pushLog, SIDE, syncOwners } from './board';
 import { isSpawnTile, makeUnit } from './build';
 import type { EventKind, GameState, Side, UnitKind } from './types';
 import type { Rng } from './rng';
@@ -10,7 +10,7 @@ export function drawEvent(rng: Rng): EventKind {
 
 /**
  * Place a free unit for `side`: home column first (lane with fewest units),
- * then any friendly bunker tile. Returns false if there was no room.
+ * then any friendly bunker tile. Returns false if every spawn tile is blocked.
  */
 export function placeFreeUnit(state: GameState, side: Side, kind: UnitKind): boolean {
   const candidates: { lane: number; col: number }[] = [];
@@ -22,11 +22,12 @@ export function placeFreeUnit(state: GameState, side: Side, kind: UnitKind): boo
       if (col !== HOME_COL[side] && isSpawnTile(state, side, lane, col)) candidates.push({ lane, col });
     }
   }
-  const open = candidates.filter((c) => state.lanes[c.lane][c.col].units.length < UNITS_PER_TILE);
+  const open = candidates;
   if (open.length === 0) return false;
   open.sort((a, b) => state.lanes[a.lane][a.col].units.length - state.lanes[b.lane][b.col].units.length);
   const { lane, col } = open[0];
   state.lanes[lane][col].units.push(makeUnit(state, side, kind));
+  state.lanes[lane][col].owner = side;
   return true;
 }
 
@@ -60,6 +61,7 @@ export function applyEvent(state: GameState, event: EventKind, rng: Rng) {
       const owner = `${bunker.owner === 'player' ? 'Your' : "AI's"} ${BUNKERS[bunker.kind].name}`;
       if (bunker.hp <= 0) {
         state.lanes[lane][col].bunker = null;
+        syncOwners(state);
         pushLog(state, `${owner} (L${lane + 1}) was destroyed by sabotage.`);
       } else {
         pushLog(state, `${owner} (L${lane + 1}) took 2 damage.`);

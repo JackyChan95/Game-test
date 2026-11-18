@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { ESCALATION_ROUNDS, EVENTS, escalation, type GameState } from '../../game';
+import { EVENTS, type GameState } from '../../game';
 import { C } from '../theme';
 import { Die } from './Die';
 
@@ -45,28 +45,14 @@ export function DiceTray({ game, rollKey, caption }: { game: GameState; rollKey:
           <Text style={styles.small}>Build phase — tap a tile.</Text>
         )}
       </View>
-      <View style={styles.eventRow}>
-        <View style={styles.event}>
-          <Text style={styles.eventName}>{ev.name.toUpperCase()}</Text>
-          <Text style={styles.eventText}>{ev.text}</Text>
-        </View>
-        <Escalation round={game.round} />
+      <View style={styles.event}>
+        <Text style={styles.eventName}>{ev.name.toUpperCase()}</Text>
+        <Text style={styles.eventText}>{ev.text}</Text>
       </View>
     </View>
   );
 }
 
-/** Current escalation bonus, or when the next step arrives. */
-function Escalation({ round }: { round: number }) {
-  const esc = escalation(round);
-  const next = ESCALATION_ROUNDS.find((r) => r > round);
-  return (
-    <View style={styles.esc}>
-      <Text style={styles.eventName}>{esc > 0 ? `ALL ATTACKS +${esc}` : 'ESCALATION'}</Text>
-      <Text style={styles.small}>{next ? `+${esc + 1} from round ${next}` : 'Maximum reached'}</Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   tray: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
@@ -75,10 +61,7 @@ const styles = StyleSheet.create({
   rollText: { fontSize: 16, fontWeight: '600', color: C.ink, marginLeft: 4 },
   caption: { fontSize: 15, fontWeight: '600', color: C.ink, letterSpacing: 0.2 },
   small: { fontSize: 11, color: C.muted, fontWeight: '400' },
-  eventRow: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  esc: { alignItems: 'flex-end' },
   event: {
-    flex: 1,
     borderLeftWidth: 2,
     borderColor: C.warn,
     paddingLeft: 8,

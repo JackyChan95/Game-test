@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Bunker, Hit, PlayerState, Side, Tile, Unit } from '../../game';
+import type { Bunker, Hit, PlayerState, Side, Tile, Unit, UnitKind } from '../../game';
 import { C, sideColor, sideTint } from '../theme';
 import { BunkerIcon, UnitIcon } from './Icons';
 
@@ -8,22 +8,44 @@ import { BunkerIcon, UnitIcon } from './Icons';
 // so their positions are computed from these numbers rather than from layout.
 const LABEL_W = 10;
 const GAP = 4;
-const TILE_H = 84;
+const TILE_H = 92;
 const LANE_GAP = 6;
 const CHIP = 22;
 const CHIP_GAP = 3;
 const COLS = 5;
+const ROW_H = 25; // chip + HP bar
+const KIND_ORDER: UnitKind[] = ['grunt', 'sniper', 'brute'];
 
 const tileWidth = (w: number) => (w - LABEL_W - COLS * GAP) / COLS;
 const tileX = (w: number, col: number) => LABEL_W + GAP + col * (tileWidth(w) + GAP);
 const laneY = (lane: number) => lane * (TILE_H + LANE_GAP);
 
-function unitPos(w: number, lane: number, col: number, index: number, count: number) {
-  const total = count * CHIP + (count - 1) * CHIP_GAP;
+/**
+ * Units on a tile are drawn as one stack per kind. Stacks sit in rows of two
+ * at the bottom of the tile; this returns the top-left of stack `index` of `count`.
+ */
+function stackPos(w: number, lane: number, col: number, index: number, count: number) {
+  const rows = Math.ceil(count / 2);
+  const row = Math.floor(index / 2);
+  const inRow = Math.min(2, count - row * 2);
+  const total = inRow * CHIP + (inRow - 1) * CHIP_GAP;
   return {
-    x: tileX(w, col) + (tileWidth(w) - total) / 2 + index * (CHIP + CHIP_GAP),
-    y: laneY(lane) + TILE_H - 6 - 28,
+    x: tileX(w, col) + (tileWidth(w) - total) / 2 + (index % 2) * (CHIP + CHIP_GAP),
+    y: laneY(lane) + TILE_H - 5 - (rows - row) * ROW_H,
   };
+}
+
+interface Stack {
+  kind: UnitKind;
+  units: Unit[];
+  alive: Unit[];
+}
+
+function stacksOf(tile: Tile): Stack[] {
+  return KIND_ORDER.map((kind) => {
+    const units = tile.units.filter((u) => u.kind === kind);
+    return { kind, units, alive: units.filter((u) => u.hp > 0) };
+  }).filter((s) => s.units.length > 0);
 }
 
 /** Scales a piece in when it first appears on the board. */
@@ -74,8 +96,12 @@ function BunkerChip({ b }: { b: Bunker }) {
   );
 }
 
-/** A unit in the overlay; glides to its new position whenever it changes. */
-function UnitSprite({ u, x, y }: { u: Unit; x: number; y: number }) {
+/**
+ * A unit in the overlay; glides to its new position whenever it changes.
+ * Every unit in a stack sits at the same spot; the stack's leader is drawn on
+ * top with the stack's count and combined HP.
+ */
+function UnitSprite({ u, x, y, stack }: { u: Unit; x: number; y: number; stack: Stack | null }) {
   const pos = useRef(new Animated.ValueXY({ x, y })).current;
   useEffect(() => {
     Animated.timing(pos, {
@@ -83,17 +109,31 @@ function UnitSprite({ u, x, y }: { u: Unit; x: number; y: number }) {
     }).start();
   }, [x, y, pos]);
   const color = sideColor(u.owner);
+  const leader = stack !== null;
+  const hp = stack ? stack.alive.reduce((n, x) => n + x.hp, 0) : u.hp;
+  const max = stack ? Math.max(1, stack.alive.reduce((n, x) => n + x.maxHp, 0)) : u.maxHp;
+  const count = stack ? stack.alive.length : 1;
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.sprite, u.hp <= 0 && styles.destroyed, { transform: [{ translateX: pos.x }, { translateY: pos.y }] }]}
+      style={[
+        styles.sprite,
+        { zIndex: leader ? 2 : 1 },
+        hp <= 0 && styles.destroyed,
+        { transform: [{ translateX: pos.x }, { translateY: pos.y }] },
+      ]}
     >
       <PopIn>
         <View style={styles.unitWrap}>
           <View style={[styles.unit, { backgroundColor: color }]}>
             <UnitIcon kind={u.kind} color={C.accentInk} detail={color} facing={u.owner} size={15} />
           </View>
-          <HpBar hp={u.hp} max={u.maxHp} color={color} width={CHIP} />
+          {leader ? <HpBar hp={hp} max={max} color={color} width={CHIP} /> : <View style={styles.hpSpacer} />}
+          {count > 1 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{count}</Text>
+            </View>
+          )}
         </View>
       </PopIn>
     </Animated.View>
@@ -144,33 +184,48 @@ interface Props {
 export function Board({ lanes, players, hits, hitKey, isSpawn, selected, onSelect }: Props) {
   const [width, setWidth] = useState(0);
 
-  const sprites: { u: Unit; x: number; y: number }[] = [];
+  const sprites: { u: Unit; x: number; y: number; stack: Stack | null }[] = [];
   const unitAt = new Map<number, { x: number; y: number }>();
   if (width > 0) {
     lanes.forEach((lane, l) =>
-      lane.forEach((tile, c) =>
-        tile.units.forEach((u, i) => {
-          const p = unitPos(width, l, c, i, tile.units.length);
-          sprites.push({ u, ...p });
-          unitAt.set(u.id, p);
-        }),
-      ),
+      lane.forEach((tile, c) => {
+        const stacks = stacksOf(tile);
+        stacks.forEach((st, i) => {
+          const p = stackPos(width, l, c, i, stacks.length);
+          const leader = st.alive[0] ?? st.units[0];
+          for (const u of st.units) {
+            sprites.push({ u, ...p, stack: u === leader ? st : null });
+            unitAt.set(u.id, p);
+          }
+        });
+      }),
     );
   }
   // Stable order so React keeps each sprite mounted while it moves.
   sprites.sort((a, b) => a.u.id - b.u.id);
 
-  const floats = width > 0 ? hits.flatMap((h, i) => {
-    if (h.base) return [];
-    let p: { x: number; y: number } | undefined;
-    if (h.unitId !== null) {
-      const at = unitAt.get(h.unitId);
-      if (at) p = { x: at.x + CHIP / 2, y: at.y + 2 };
-    } else if (h.lane !== null && h.col !== null) {
-      p = { x: tileX(width, h.col) + tileWidth(width) / 2, y: laneY(h.lane) + 30 };
+  // One damage number per spot: hits on units in the same stack are added up.
+  const floatAt = new Map<string, { x: number; y: number; damage: number }>();
+  if (width > 0) {
+    for (const h of hits) {
+      if (h.base) continue;
+      let p: { x: number; y: number } | undefined;
+      if (h.unitId !== null) {
+        const at = unitAt.get(h.unitId);
+        if (at) p = { x: at.x + CHIP / 2, y: at.y + 2 };
+      } else if (h.lane !== null && h.col !== null) {
+        p = { x: tileX(width, h.col) + tileWidth(width) / 2, y: laneY(h.lane) + 30 };
+      }
+      if (!p) continue;
+      const k = `${p.x}-${p.y}`;
+      const f = floatAt.get(k) ?? { ...p, damage: 0 };
+      f.damage += h.damage;
+      floatAt.set(k, f);
     }
-    return p ? [<DamageFloat key={`${hitKey}-${i}`} damage={h.damage} x={p.x} y={p.y} />] : [];
-  }) : [];
+  }
+  const floats = [...floatAt.entries()].map(([k, f]) => (
+    <DamageFloat key={`${hitKey}-${k}`} damage={f.damage} x={f.x} y={f.y} />
+  ));
 
   return (
     <View style={styles.board}>
@@ -194,7 +249,7 @@ export function Board({ lanes, players, hits, hitKey, isSpawn, selected, onSelec
           ))}
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {sprites.map((s) => (
-              <UnitSprite key={s.u.id} u={s.u} x={s.x} y={s.y} />
+              <UnitSprite key={s.u.id} u={s.u} x={s.x} y={s.y} stack={s.stack} />
             ))}
             {floats}
           </View>
@@ -234,7 +289,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: 'transparent',
-    paddingTop: 5,
+    paddingTop: 4,
     alignItems: 'center',
   },
   spawn: { borderColor: C.faint, borderStyle: 'dashed' },
@@ -261,6 +316,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   destroyed: { opacity: 0.3 },
+  hpSpacer: { height: 3 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 13,
+    height: 13,
+    borderRadius: 6.5,
+    paddingHorizontal: 2,
+    backgroundColor: C.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: C.surface, fontSize: 9, fontWeight: '700' },
   hpTrack: { height: 3, borderRadius: 1.5, backgroundColor: 'rgba(0,0,0,0.08)', overflow: 'hidden' },
   hpFill: { height: 3 },
   float: { position: 'absolute', width: 40, alignItems: 'center' },

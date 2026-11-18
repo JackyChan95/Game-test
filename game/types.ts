@@ -21,7 +21,7 @@ export interface Unit {
 }
 
 export interface Tile {
-  /** Who controls this tile; persists until the other side moves in or builds. */
+  /** Who occupies this tile (units or a bunker); null when empty. Kept in sync by syncOwners. */
   owner: Side | null;
   bunker: Bunker | null;
   units: Unit[];
@@ -52,7 +52,7 @@ export interface Hit {
 
 /** Board snapshot after one stage of the end-of-turn sequence. */
 export interface TurnFrame {
-  stage: 'aiBuild' | 'move' | 'attack';
+  stage: 'aiBuild' | 'attack' | 'move';
   /** The round being resolved. */
   round: number;
   lanes: Tile[][];

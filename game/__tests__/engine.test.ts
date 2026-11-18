@@ -31,8 +31,9 @@ describe('engine', () => {
     expect(s.round).toBe(1);
     expect(s.rolls).toHaveLength(2);
     expect(s.players.player.supply).toBeGreaterThanOrEqual(4 + 2);
-    expect(countTiles(s, 'player')).toBe(6);
-    expect(countTiles(s, 'enemy')).toBe(6);
+    // Every tile starts neutral.
+    expect(countTiles(s, 'player')).toBe(0);
+    expect(countTiles(s, 'enemy')).toBe(0);
   });
 
   it('does not mutate the input state', () => {
@@ -46,7 +47,8 @@ describe('engine', () => {
   it('rejects illegal actions by returning the same state', () => {
     const s = createGame('abc');
     expect(gameReducer(s, { type: 'trainUnit', lane: 0, col: 3, kind: 'grunt' })).toBe(s);
-    expect(gameReducer(s, { type: 'buildBunker', lane: 0, col: 4, kind: 'wall' })).toBe(s);
+    expect(gameReducer(s, { type: 'buildBunker', lane: 0, col: 2, kind: 'wall' })).toBe(s);
+    expect(gameReducer(s, { type: 'buildBunker', lane: 0, col: 1, kind: 'wall' })).not.toBe(s);
   });
 
   it('is deterministic: same seed + same actions = same game', () => {
@@ -70,10 +72,10 @@ describe('engine', () => {
     s = gameReducer(s, { type: 'trainUnit', lane: 0, col: 0, kind: 'grunt' });
     expect(s.replay).toEqual([]);
     s = gameReducer(s, { type: 'endTurn' });
-    expect(s.replay.map((f) => f.stage)).toEqual(['aiBuild', 'move', 'attack']);
+    expect(s.replay.map((f) => f.stage)).toEqual(['aiBuild', 'attack', 'move']);
     // The grunt trained at column 1 has advanced in the move frame.
     expect(s.replay[0].lanes[0][0].units[0].kind).toBe('grunt');
-    expect(s.replay[1].lanes[0][1].units[0].kind).toBe('grunt');
+    expect(s.replay[2].lanes[0][1].units[0].kind).toBe('grunt');
     s = gameReducer(s, { type: 'trainUnit', lane: 1, col: 0, kind: 'grunt' });
     expect(s.replay).toEqual([]);
   });
@@ -84,7 +86,7 @@ describe('engine', () => {
     expect(checkWinner(s)?.winner).toBe('draw');
     s.players.enemy.baseHp = 15;
     expect(checkWinner(s)?.winner).toBe('player');
-    s.lanes[0][2].owner = 'enemy';
+    s.lanes[0][2].owner = 'enemy'; // as if an AI unit stood there
     expect(checkWinner(s)?.winner).toBe('enemy');
   });
 

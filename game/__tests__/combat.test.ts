@@ -1,6 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { applyAttacks, collectAttacks, escalation, findTarget, moveUnits, resolveClash } from '../combat';
-import { ESCALATION_ROUNDS, MAX_ROUNDS, SIEGE_BONUS } from '../config';
+import { applyAttacks, collectAttacks, findTarget, moveUnits, resolveClash } from '../combat';
 import { createRng } from '../rng';
 import { emptyGame, highRng, lowRng, putBunker, putUnit } from './helpers';
 
@@ -37,15 +36,22 @@ describe('movement', () => {
     expect(s.lanes[0][1].units).toHaveLength(1);
   });
 
-  it('never puts more than 2 units on a tile', () => {
+  it('has no limit on units per tile', () => {
     const s = emptyGame();
-    putUnit(s, 'player', 0, 2, 'grunt');
-    putUnit(s, 'player', 0, 2, 'grunt');
+    for (let i = 0; i < 4; i++) putUnit(s, 'player', 0, 2, 'grunt');
     putBunker(s, 'enemy', 0, 4, 'wall');
     putUnit(s, 'player', 0, 1, 'grunt');
     moveUnits(s, 'player');
-    expect(s.lanes[0][3].units).toHaveLength(2);
+    expect(s.lanes[0][3].units).toHaveLength(4);
     expect(s.lanes[0][2].units).toHaveLength(1);
+  });
+
+  it('a tile left empty becomes neutral', () => {
+    const s = emptyGame();
+    putUnit(s, 'player', 0, 2, 'grunt');
+    moveUnits(s, 'player');
+    expect(s.lanes[0][2].owner).toBeNull();
+    expect(s.lanes[0][3].owner).toBe('player');
   });
 });
 
@@ -58,11 +64,41 @@ describe('targeting', () => {
     expect(findTarget(s, 'player', 0, 1, 2, [1])).toMatchObject({ type: 'unit', col: 3 });
   });
 
-  it('hits the bunker before units sheltering on its tile', () => {
+  it('prefers an adjacent melee unit, then buildings, then melee, then ranged', () => {
     const s = emptyGame();
-    putBunker(s, 'enemy', 0, 3, 'wall');
+    putUnit(s, 'enemy', 0, 3, 'sniper');
+    expect(findTarget(s, 'player', 0, 2, 2, [1])).toMatchObject({ type: 'unit' });
+    putUnit(s, 'enemy', 0, 4, 'grunt');
+    // Melee unit two tiles away beats the ranged unit next door.
+    expect(findTarget(s, 'player', 0, 2, 2, [1])).toMatchObject({ type: 'unit', col: 4 });
+    putBunker(s, 'enemy', 0, 4, 'wall');
+    expect(findTarget(s, 'player', 0, 2, 2, [1])).toMatchObject({ type: 'bunker', col: 4 });
+    putUnit(s, 'enemy', 0, 3, 'brute');
+    // An enemy melee unit in melee range comes first of all.
+    const t = findTarget(s, 'player', 0, 2, 2, [1]);
+    expect(t).toMatchObject({ type: 'unit', col: 3 });
+    expect(s.lanes[0][3].units.find((u) => t?.type === 'unit' && u.id === t.id)?.kind).toBe('brute');
+  });
+
+  it('back ranks reach past their own column', () => {
+    const s = emptyGame();
+    putUnit(s, 'player', 0, 1, 'grunt');
+    putUnit(s, 'player', 0, 2, 'grunt');
     putUnit(s, 'enemy', 0, 3, 'grunt');
-    expect(findTarget(s, 'player', 0, 2, 1, [1])).toMatchObject({ type: 'bunker', col: 3 });
+    const attacks = collectAttacks(s, lowRng, false);
+    expect(attacks.filter((a) => a.attacker.startsWith('Your'))).toHaveLength(2);
+  });
+
+  it('does not overkill: spare attackers move on to the next target', () => {
+    const s = emptyGame();
+    putUnit(s, 'player', 0, 2, 'brute');
+    putUnit(s, 'player', 0, 2, 'brute');
+    putUnit(s, 'enemy', 0, 3, 'grunt', 2);
+    putUnit(s, 'enemy', 0, 3, 'grunt');
+    const ids = s.lanes[0][3].units.map((u) => u.id);
+    const attacks = collectAttacks(s, lowRng, false).filter((a) => a.attacker.startsWith('Your'));
+    const targets = attacks.map((a) => (a.target.type === 'unit' ? a.target.id : null));
+    expect(new Set(targets)).toEqual(new Set(ids));
   });
 
   it('targets the enemy base from the last tile', () => {
@@ -95,26 +131,6 @@ describe('attacks', () => {
         expect(a.damage).toBeLessThanOrEqual(4);
       }
     }
-  });
-
-  it('units deal siege damage to bunkers and bases', () => {
-    const s = emptyGame();
-    putUnit(s, 'player', 0, 2, 'grunt');
-    putBunker(s, 'enemy', 0, 3, 'wall');
-    putUnit(s, 'player', 1, 4, 'grunt');
-    const attacks = collectAttacks(s, lowRng, false);
-    expect(attacks.map((a) => a.damage)).toEqual([2 + SIEGE_BONUS, 2 + SIEGE_BONUS]);
-  });
-
-  it('escalation adds +1 damage per escalation round reached', () => {
-    expect(escalation(1)).toBe(0);
-    expect(escalation(ESCALATION_ROUNDS[0])).toBe(1);
-    expect(escalation(MAX_ROUNDS)).toBe(ESCALATION_ROUNDS.length);
-    const s = emptyGame();
-    putUnit(s, 'player', 0, 2, 'grunt');
-    putUnit(s, 'enemy', 0, 3, 'grunt');
-    s.round = ESCALATION_ROUNDS[1];
-    expect(collectAttacks(s, lowRng, false)[0].damage).toBe(2 + 2);
   });
 
   it('blizzard gives ranged attacks -1 but not melee', () => {
@@ -167,12 +183,23 @@ describe('attacks', () => {
     expect(s.lanes[0][2].units[0].hp).toBe(6);
   });
 
-  it('a full clash damages the base', () => {
+  it('a clash attacks first, then moves', () => {
     const s = emptyGame();
-    putUnit(s, 'player', 1, 3, 'brute');
+    putUnit(s, 'player', 1, 4, 'brute');
+    putUnit(s, 'player', 2, 3, 'brute');
     s.round = 1;
     resolveClash(s, highRng);
-    expect(s.lanes[1][4].units).toHaveLength(1);
-    expect(s.players.enemy.baseHp).toBe(20 - (6 + SIEGE_BONUS));
+    // Only the brute already beside the base hits it; the other moves up afterwards.
+    expect(s.players.enemy.baseHp).toBe(20 - 6);
+    expect(s.lanes[2][4].units).toHaveLength(1);
+  });
+
+  it('kills clear the way: units advance after the enemy in front dies', () => {
+    const s = emptyGame();
+    putUnit(s, 'player', 0, 2, 'brute');
+    putUnit(s, 'enemy', 0, 3, 'grunt', 1);
+    s.round = 1;
+    resolveClash(s, lowRng);
+    expect(s.lanes[0][3].units[0]).toMatchObject({ kind: 'brute', owner: 'player' });
   });
 });

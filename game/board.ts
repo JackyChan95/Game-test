@@ -45,6 +45,11 @@ export function presence(tile: Tile): Side | null {
   return null;
 }
 
+/** A tile belongs to whoever has units or a bunker on it; an empty tile is neutral. */
+export function syncOwners(state: GameState) {
+  for (const lane of state.lanes) for (const tile of lane) tile.owner = presence(tile);
+}
+
 export function pushLog(state: GameState, line: string) {
   state.log.push(line);
   if (state.log.length > 60) state.log.splice(0, state.log.length - 60);

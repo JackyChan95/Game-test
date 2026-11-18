@@ -2,23 +2,17 @@
  * Top-level game flow. `gameReducer` is the single entry point the UI uses:
  * it never mutates its input and is fully deterministic given the seed.
  */
-import { BASE_HP, COLS, ESCALATION_ROUNDS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
+import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
 import { clone, countTiles, pushLog } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, trainUnit, upgradeBunker,
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
-import { escalation, resolveClash, type Attack } from './combat';
+import { resolveClash, type Attack } from './combat';
 import { runAiTurn } from './ai';
 import { createRng, seedFrom, type Rng } from './rng';
 import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame } from './types';
-
-function initialOwner(col: number): Side | null {
-  if (col < 2) return 'player';
-  if (col > 2) return 'enemy';
-  return null;
-}
 
 /** Income + event for a new round. Mutates state. */
 function startRound(state: GameState, rng: Rng) {
@@ -29,14 +23,11 @@ function startRound(state: GameState, rng: Rng) {
   pushLog(state, `Income: you rolled ${p.dice.join('+')}${p.bonus ? ` +${p.bonus}` : ''}, AI rolled ${e.dice.join('+')}${e.bonus ? ` +${e.bonus}` : ''}.`);
   state.event = drawEvent(rng);
   applyEvent(state, state.event, rng);
-  if (ESCALATION_ROUNDS.includes(state.round)) {
-    pushLog(state, `Escalation: all attacks now deal +${escalation(state.round)} damage.`);
-  }
 }
 
 export function createGame(seed: string): GameState {
   const lanes: Tile[][] = Array.from({ length: LANES }, () =>
-    Array.from({ length: COLS }, (_, col) => ({ owner: initialOwner(col), bunker: null, units: [] })),
+    Array.from({ length: COLS }, () => ({ owner: null, bunker: null, units: [] })),
   );
   const state: GameState = {
     seed,

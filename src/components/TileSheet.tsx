@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  BUNKERS, SIEGE_BONUS, UNITS, escalation, validateAction,
+  BUNKERS, UNITS, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
@@ -108,10 +108,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
         )}
 
         <Text style={styles.section}>TRAIN UNIT</Text>
-        <Text style={styles.note}>
-          Units deal +{SIEGE_BONUS} damage to bunkers and bases.
-          {escalation(game.round) > 0 ? ` All attacks +${escalation(game.round)} (escalation).` : ''}
-        </Text>
+        <Text style={styles.note}>Train on your home column or on one of your bunkers. No limit per tile.</Text>
         {UNIT_KINDS.map((k) => {
           const a: Action = { type: 'trainUnit', lane, col, kind: k };
           return (

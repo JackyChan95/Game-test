@@ -7,11 +7,8 @@ export const MAX_ROUNDS = 20;
 export const BASE_HP = 20;
 export const SUPPLY_CAP = 15;
 export const STARTING_SUPPLY = 4;
-export const UNITS_PER_TILE = 2;
-/** Rounds at which every attack permanently gains +1 damage, so long games escalate. */
-export const ESCALATION_ROUNDS = [6, 10, 14];
-/** Extra damage units deal to bunkers and bases, so attackers can break a defended lane. */
-export const SIEGE_BONUS = 2;
+/** Bunkers can be built on empty tiles this many columns from your base (your home zone). */
+export const HOME_ZONE = 2;
 
 export interface BunkerStats {
   name: string;
@@ -32,11 +29,11 @@ export interface BunkerStats {
 
 export const BUNKERS: Record<BunkerKind, BunkerStats> = {
   wall: {
-    name: 'Wall', cost: 2, hp: 10, damage: null, range: 0, income: 0,
+    name: 'Wall', cost: 2, hp: 14, damage: null, range: 0, income: 0,
     upgradeCost: 2, upgradeHp: 6, upgradeDamage: 0, upgradeIncome: 0, blurb: 'Cheap, tough, blocks the lane.',
   },
   turret: {
-    name: 'Turret', cost: 4, hp: 8, damage: [2, 3], range: 2, income: 0,
+    name: 'Turret', cost: 4, hp: 10, damage: [2, 3], range: 2, income: 0,
     upgradeCost: 3, upgradeHp: 4, upgradeDamage: 1, upgradeIncome: 0, blurb: 'Fires 2 tiles down the lane.',
   },
   depot: {
@@ -56,9 +53,9 @@ export interface UnitStats {
 }
 
 export const UNITS: Record<UnitKind, UnitStats> = {
-  grunt: { name: 'Grunt', cost: 2, hp: 6, damage: [2, 4], range: 1, blurb: 'Cheap melee.' },
-  sniper: { name: 'Sniper', cost: 3, hp: 4, damage: [3, 4], range: 2, blurb: 'Ranged, fragile.' },
-  brute: { name: 'Brute', cost: 5, hp: 12, damage: [4, 6], range: 1, blurb: 'Heavy hitter.' },
+  grunt: { name: 'Grunt', cost: 3, hp: 6, damage: [2, 4], range: 1, blurb: 'Cheap melee.' },
+  sniper: { name: 'Sniper', cost: 4, hp: 4, damage: [3, 4], range: 2, blurb: 'Ranged, fragile.' },
+  brute: { name: 'Brute', cost: 7, hp: 12, damage: [4, 6], range: 1, blurb: 'Heavy hitter.' },
 };
 
 export const EVENTS: Record<EventKind, { name: string; text: string }> = {

@@ -2,7 +2,7 @@
  * Build-phase rules: validation and (mutating) application of build actions.
  * Callers should pass a cloned state; the engine does this for you.
  */
-import { BUNKERS, HOME_COL, UNITS, UNITS_PER_TILE } from './config';
+import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNITS } from './config';
 import { inBounds, other, pushLog, SIDE } from './board';
 import type { BunkerKind, GameState, Side, Unit, UnitKind } from './types';
 
@@ -13,9 +13,9 @@ export function canBuildBunker(
   if (state.phase !== 'build') return 'Not in build phase';
   if (!inBounds(lane, col)) return 'Off the map';
   const tile = state.lanes[lane][col];
-  if (tile.owner !== side) return 'You must hold this tile';
-  if (tile.units.some((u) => u.owner !== side)) return 'Enemy units here';
   if (tile.bunker) return 'Tile already has a bunker';
+  if (tile.owner && tile.owner !== side) return 'Enemy units here';
+  if (tile.owner !== side && !inHomeZone(side, col)) return 'Build in your first two columns or where your units stand';
   if (state.players[side].supply < BUNKERS[kind].cost) return 'Not enough supply';
   return null;
 }
@@ -30,12 +30,14 @@ export function canUpgradeBunker(state: GameState, side: Side, lane: number, col
   return null;
 }
 
-/** Units can be trained on your home column, or on any tile with your bunker. */
+/** Your first HOME_ZONE columns, where you may build on empty tiles. */
+export const inHomeZone = (side: Side, col: number) => Math.abs(col - BASE_COL[side]) <= HOME_ZONE;
+
+/** Units can be trained on your home column, or on any tile with your bunker, if no enemy is there. */
 export function isSpawnTile(state: GameState, side: Side, lane: number, col: number): boolean {
   if (!inBounds(lane, col)) return false;
   const tile = state.lanes[lane][col];
-  if (tile.owner !== side) return false;
-  if (tile.units.some((u) => u.owner === other(side))) return false;
+  if (tile.owner === other(side)) return false;
   return col === HOME_COL[side] || tile.bunker?.owner === side;
 }
 
@@ -44,7 +46,6 @@ export function canTrainUnit(
 ): string | null {
   if (state.phase !== 'build') return 'Not in build phase';
   if (!isSpawnTile(state, side, lane, col)) return 'Train on your home column or a bunker tile';
-  if (state.lanes[lane][col].units.length >= UNITS_PER_TILE) return 'Tile is full (2 units)';
   if (state.players[side].supply < UNITS[kind].cost) return 'Not enough supply';
   return null;
 }
@@ -55,6 +56,7 @@ export function buildBunker(state: GameState, side: Side, lane: number, col: num
   state.lanes[lane][col].bunker = {
     id: state.nextId++, kind, owner: side, hp: stats.hp, maxHp: stats.hp, upgraded: false,
   };
+  state.lanes[lane][col].owner = side;
   pushLog(state, `${SIDE[side]} built a ${stats.name} (L${lane + 1}).`);
 }
 
@@ -76,5 +78,6 @@ export function makeUnit(state: GameState, side: Side, kind: UnitKind): Unit {
 export function trainUnit(state: GameState, side: Side, lane: number, col: number, kind: UnitKind) {
   state.players[side].supply -= UNITS[kind].cost;
   state.lanes[lane][col].units.push(makeUnit(state, side, kind));
+  state.lanes[lane][col].owner = side;
   pushLog(state, `${SIDE[side]} trained a ${UNITS[kind].name} (L${lane + 1}).`);
 }

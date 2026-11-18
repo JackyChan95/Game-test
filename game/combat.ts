@@ -1,18 +1,23 @@
 /**
- * Clash phase: movement, then simultaneous attacks.
+ * Clash phase: attacks first, then movement.
  *
- * Movement: each unit advances one tile toward the enemy base unless it already
- * has a target in range, the next tile holds an enemy (unit or bunker), or the
- * next tile already has 2 friendly units. Moving onto a tile claims it.
+ * Attacks: every unit and armed bunker picks an enemy in its lane within
+ * range, by priority: an enemy melee unit in melee range, then buildings, then
+ * melee units, then ranged units, then the base (ties go to the nearest).
+ * A unit's range is measured from the front of its own column, so units
+ * queued behind friendly units still reach the enemy front. Damage is rolled within the attacker's range,
+ * minimum 1. Attacks never overkill: once enough damage is assigned to destroy
+ * a target, further attackers pick the next enemy. All damage lands at once
+ * (a unit destroyed this round still gets its attack), then the destroyed are
+ * removed.
  *
- * Attacks: every unit and armed bunker picks the nearest enemy in its lane
- * within range (a bunker on a tile is hit before the units sheltering in it,
- * the base is hit when nothing closer is in range). Damage is rolled within the
- * attacker's range (e.g. 2–3), minimum 1. All damage is applied at once, then
- * the dead are removed.
+ * Movement: each unit then advances one tile toward the enemy base unless it
+ * has a target in range or the next tile holds an enemy (unit or bunker).
+ * There is no limit on units per tile. A tile belongs to whoever has units
+ * or a bunker on it; an empty tile is neutral.
  */
-import { BASE_COL, BUNKERS, COLS, DIR, ESCALATION_ROUNDS, SIEGE_BONUS, UNITS, UNITS_PER_TILE } from './config';
-import { other, pushLog } from './board';
+import { BASE_COL, BUNKERS, COLS, DIR, UNITS } from './config';
+import { other, pushLog, syncOwners } from './board';
 import type { GameState, Side } from './types';
 import type { Rng } from './rng';
 
@@ -36,22 +41,51 @@ export interface Attack {
  * Nearest enemy of `side` in `lane` within `range` of `col`.
  * `dirs` = which directions to search (units look forward only, bunkers both ways).
  */
+/**
+ * Target priority, lowest first: an enemy melee unit in melee range, then
+ * buildings, then melee units, then ranged units, then the base. Ties go to the
+ * nearest. `alive` lets the caller skip targets that are already doomed.
+ */
 export function findTarget(
   state: GameState, side: Side, lane: number, col: number, range: number, dirs: number[],
+  alive: (t: Target) => boolean = () => true,
 ): Target | null {
   const foe = other(side);
+  const options: { t: Target; rank: number; dist: number }[] = [];
   for (let d = 1; d <= range; d++) {
     for (const dir of dirs) {
       const c = col + dir * d;
-      if (c === BASE_COL[foe]) return { type: 'base', side: foe };
+      if (c === BASE_COL[foe]) options.push({ t: { type: 'base', side: foe }, rank: 4, dist: d });
       if (c < 0 || c >= COLS) continue;
       const tile = state.lanes[lane][c];
-      if (tile.bunker && tile.bunker.owner === foe) return { type: 'bunker', lane, col: c };
-      const unit = tile.units.find((u) => u.owner === foe);
-      if (unit) return { type: 'unit', lane, col: c, id: unit.id };
+      if (tile.bunker && tile.bunker.owner === foe) {
+        options.push({ t: { type: 'bunker', lane, col: c }, rank: 1, dist: d });
+      }
+      for (const u of tile.units) {
+        if (u.owner !== foe) continue;
+        const melee = UNITS[u.kind].range === 1;
+        const rank = melee ? (d === 1 ? 0 : 2) : 3;
+        options.push({ t: { type: 'unit', lane, col: c, id: u.id }, rank, dist: d });
+      }
     }
   }
-  return null;
+  options.sort((a, b) => a.rank - b.rank || a.dist - b.dist);
+  return options.find((o) => alive(o.t))?.t ?? null;
+}
+
+/**
+ * Column a unit's range is measured from: the front of the unbroken column of
+ * friendly units it stands in, so the back ranks of an army can still fight.
+ */
+export function reachFrom(state: GameState, side: Side, lane: number, col: number): number {
+  const dir = DIR[side];
+  let front = col;
+  while (front + dir >= 0 && front + dir < COLS) {
+    const units = state.lanes[lane][front + dir].units;
+    if (units.length === 0 || units.some((u) => u.owner !== side)) break;
+    front += dir;
+  }
+  return front;
 }
 
 export function moveUnits(state: GameState, first: Side) {
@@ -70,49 +104,57 @@ export function moveUnits(state: GameState, first: Side) {
           const dest = state.lanes[lane][next];
           if (dest.bunker && dest.bunker.owner !== side) continue;
           if (dest.units.some((u) => u.owner !== side)) continue;
-          if (dest.units.length >= UNITS_PER_TILE) continue;
           tile.units = tile.units.filter((u) => u.id !== unit.id);
           dest.units.push(unit);
-          dest.owner = side;
         }
       }
     }
   }
+  syncOwners(state);
 }
 
 const NAME = (side: Side, name: string) => `${side === 'player' ? 'Your' : 'AI'} ${name}`;
 
-/** Damage bonus every attack gets in this round from escalation. */
-export const escalation = (round: number) => ESCALATION_ROUNDS.filter((r) => round >= r).length;
-
 export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): Attack[] {
   const attacks: Attack[] = [];
-  const esc = escalation(state.round);
-  const add = (attacker: string, target: Target, [lo, hi]: [number, number], ranged: boolean) => {
-    const min = lo + esc;
-    const max = hi + esc;
+
+  // Damage already assigned this round, so later attackers skip doomed targets.
+  const pending = new Map<string, number>();
+  const key = (t: Target) =>
+    t.type === 'base' ? `base-${t.side}` : t.type === 'unit' ? `unit-${t.id}` : `bunker-${t.lane}-${t.col}`;
+  const hpOf = (t: Target): number => {
+    if (t.type === 'base') return Infinity; // always worth hitting
+    const tile = state.lanes[t.lane][t.col];
+    if (t.type === 'bunker') return tile.bunker?.hp ?? 0;
+    return tile.units.find((u) => u.id === t.id)?.hp ?? 0;
+  };
+  const alive = (t: Target) => hpOf(t) - (pending.get(key(t)) ?? 0) > 0;
+
+  const add = (
+    attacker: string, target: Target, [min, max]: [number, number], ranged: boolean,
+  ) => {
     const modifier = blizzard && ranged ? -1 : 0;
     const damage = Math.max(1, rng.int(min, max) + modifier);
     attacks.push({ attacker, target, min, max, modifier, damage });
+    pending.set(key(target), (pending.get(key(target)) ?? 0) + damage);
   };
+
   state.lanes.forEach((lane, l) =>
     lane.forEach((tile, c) => {
       const b = tile.bunker;
       if (b) {
         const s = BUNKERS[b.kind];
         if (s.damage !== null) {
-          const target = findTarget(state, b.owner, l, c, s.range, [DIR[b.owner], -DIR[b.owner]]);
+          const target = findTarget(state, b.owner, l, c, s.range, [DIR[b.owner], -DIR[b.owner]], alive);
           const up = b.upgraded ? s.upgradeDamage : 0;
-          const range: [number, number] = [s.damage[0] + up, s.damage[1] + up];
-          if (target) add(`${NAME(b.owner, s.name)} (L${l + 1})`, target, range, s.range >= 2);
+          if (target) add(`${NAME(b.owner, s.name)} (L${l + 1})`, target, [s.damage[0] + up, s.damage[1] + up], s.range >= 2);
         }
       }
       for (const u of tile.units) {
         const s = UNITS[u.kind];
-        const target = findTarget(state, u.owner, l, c, s.range, [DIR[u.owner]]);
-        const siege = target && target.type !== 'unit' ? SIEGE_BONUS : 0;
-        const range: [number, number] = [s.damage[0] + siege, s.damage[1] + siege];
-        if (target) add(`${NAME(u.owner, s.name)} (L${l + 1})`, target, range, s.range >= 2);
+        const from = reachFrom(state, u.owner, l, c);
+        const target = findTarget(state, u.owner, l, from, s.range, [DIR[u.owner]], alive);
+        if (target) add(`${NAME(u.owner, s.name)} (L${l + 1})`, target, s.damage, s.range >= 2);
       }
     }),
   );
@@ -167,21 +209,22 @@ export function removeDestroyed(state: GameState) {
   for (const side of ['player', 'enemy'] as Side[]) {
     state.players[side].baseHp = Math.max(0, state.players[side].baseHp);
   }
+  syncOwners(state);
 }
 
 /** Called after each stage of the clash so the UI can animate it. */
 export type ClashObserver = (stage: 'move' | 'attack', attacks: Attack[]) => void;
 
-/** Full clash: move, then fight. Mutates state. */
+/** Full clash: fight, then move. Mutates state. */
 export function resolveClash(state: GameState, rng: Rng, observe?: ClashObserver) {
   pushLog(state, `— Clash, round ${state.round} —`);
-  // Alternate who moves first so neither side has a permanent edge.
-  const first: Side = state.round % 2 === 1 ? 'player' : 'enemy';
-  moveUnits(state, first);
-  observe?.('move', []);
   const attacks = collectAttacks(state, rng, state.event === 'blizzard');
   if (attacks.length === 0) pushLog(state, 'No contact this round.');
   applyDamage(state, attacks);
   observe?.('attack', attacks);
   removeDestroyed(state);
+  // Alternate who moves first so neither side always claims contested tiles.
+  const first: Side = state.round % 2 === 1 ? 'player' : 'enemy';
+  moveUnits(state, first);
+  observe?.('move', []);
 }
