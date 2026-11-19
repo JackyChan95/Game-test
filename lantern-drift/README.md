@@ -20,12 +20,15 @@ python3 -m http.server 8000   # then open http://<your-computer-ip>:8000 on the 
 ## How it plays
 
 There are seven lantern colours, in rainbow order: red, orange, yellow, green, blue, indigo, violet.
-Touch a lantern and drag to build a chain. There's no distance limit, so any matching lantern on the pond can join.
+Touch a lantern and drag to build a chain. There's no distance limit, but there is **line of sight**:
+the thread between two lanterns can't pass through any other lantern (lanterns already in your chain don't count).
+While you drag, the loose thread turns faint and dashed and the lanterns in the way fade back. The pond keeps drifting
+(slowly, while you're drawing), so a blocked link can open up if you wait a moment.
 
 - **Same-colour chain:** link lanterns that are all one colour.
 - **Rainbow chain:** link each lantern to the next colour in the spectrum (red → orange → yellow …).
   It works in either direction and wraps round from violet back to red.
-  Your first link decides which kind of chain it is. Lanterns that fit next pulse with a faint ring.
+  Your first link decides which kind of chain it is. Lanterns you can link next (right colour, clear line) pulse with a faint ring.
 - **Undo:** slide straight back along the thread to drop the last link. Swiping across an earlier lantern on the way somewhere else doesn't undo.
 - **Score:** a same-colour chain of *n* is worth `n² × 10`; a rainbow chain `n² × 15`.
   Each full red-to-violet run adds +350 (**full spectrum**), and clearing every lantern of one colour adds +100.
