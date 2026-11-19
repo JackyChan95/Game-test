@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BC Macro Model</title>
+<style>
+  :root { --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --rule:#e4e3df; --accent:#2a78d6; --warn-bg:#fff7e6; --warn-rule:#eda100; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink); font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:1180px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:28px; margin:0 0 4px; }
+  h2 { font-size:21px; margin:40px 0 8px; padding-top:16px; border-top:1px solid var(--rule); }
+  h3 { font-size:16px; margin:24px 0 6px; }
+  p, li { max-width:80ch; }
+  .sub { color:var(--ink2); margin:0 0 16px; }
+  .note { color:var(--ink2); font-size:13px; }
+  img { width:100%; height:auto; display:block; margin:8px 0 4px; }
+  .scroll { overflow-x:auto; margin:8px 0 16px; }
+  table.tbl { border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; min-width:100%; }
+  .tbl th, .tbl td { padding:5px 9px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top; }
+  .tbl th { color:var(--ink2); font-weight:600; background:#f4f3f0; position:sticky; top:0; }
+  .findings li { margin:6px 0; }
+  .caveat { background:var(--warn-bg); border-left:4px solid var(--warn-rule); padding:12px 16px; margin:12px 0; }
+  nav { display:flex; flex-wrap:wrap; gap:6px 14px; }
+  nav a { color:var(--accent); text-decoration:none; white-space:nowrap; }
+  code { background:#f0efec; padding:1px 4px; border-radius:3px; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+<h1>British Columbia &amp; Vancouver macro-econometric model</h1>
+<p class="sub">Run date {{ today }} · Statistics Canada WDS and Bank of Canada Valet (live public data) · Forecast horizon {{ horizon }} months</p>
+<nav><a href="#findings">Findings</a><a href="#data">Data</a><a href="#stationarity">Stationarity</a><a href="#bvar">BVAR</a><a href="#housing">Housing ECM</a><a href="#nowcast">Nowcast</a><a href="#validation">Validation</a><a href="#caveats">Caveats</a></nav>
+
+<h2 id="findings">Key findings</h2>
+<ul class="findings">{% for f in findings %}<li>{{ f }}</li>{% endfor %}</ul>
+<p class="note">This is a trend and scenario tool. It is not a valuation of any individual property, and the bands are model-based. Real uncertainty is larger (see <a href="#caveats">caveats</a>).</p>
+
+<h2 id="data">1. Data</h2>
+<p>Every StatCan series is found by (table, member coordinate) and resolved at run time with <code>getSeriesInfoFromCubePidCoord</code>. The pipeline stops if the vector ID or the geography in the title differs from the registry. Raw JSON is cached in <code>data/raw/</code> with a UTC timestamp. A new file is written only when the content changes.</p>
+<div class="scroll">{{ series_table|safe }}</div>
+<h3>Construction notes</h3>
+<ul>
+  <li><b>BC real GDP is published annually only</b> (table 36-10-0711). The monthly series used here is a Chow-Lin disaggregation (AR(1) residual, ρ = {{ "%.2f"|format(chow_lin.rho) }}). Its indicators are Canada monthly real GDP and BC LFS employment. It matches published annual totals through {{ chow_lin.benchmarked_until.year }}; later months are indicator-based extrapolations.</li>
+  <li><b>Population</b> (quarterly, a stock on the first day of the quarter) is interpolated to monthly with a PCHIP spline on log levels and flagged. Monthly population growth is therefore smooth within each quarter.</li>
+  <li><b>Policy rate</b>: Valet's V39079 starts in April 2009. Earlier months use the Bank Rate (V122530) minus 25bp, which equals the overnight target since 1996 by construction of the operating band. On the overlap the median spread is {{ "%.3f"|format(splice.median_spread) }} pp, and {{ "%.0f"|format(100*splice.share_exact) }}% of months are exactly 25bp. The rest are rate-decision months, where a point-in-time value is compared with a monthly average.</li>
+  <li><b>Seasonal adjustment</b> is applied only to series StatCan does not adjust, and only if a monthly-dummy F-test finds seasonality (p &lt; 0.01). It uses STL on logs. CPI and Vancouver housing starts were adjusted. The NHPI showed no significant seasonality and was left as published.</li>
+  <li>Retail table 20-10-0008 (named in the brief) is inactive and ends in 2022; the active replacement 20-10-0056 starts in 2017. Average weekly earnings use the seasonally adjusted table 14-10-0223 rather than the unadjusted 14-10-0203. The "including unclassified" aggregate has no published values, so the "excluding unclassified businesses" aggregate is used.</li>
+</ul>
+<h3>BC monthly GDP (Chow-Lin) vs published annual levels</h3>
+<img alt="Chow-Lin monthly BC GDP with published annual levels" src="data:image/png;base64,{{ chowlin_png }}">
+
+<h2 id="stationarity">2. Stationarity report (BVAR variables)</h2>
+<p>ADF (H0: unit root) and KPSS (H0: stationary) tests at 5%. A series counts as stationary only if ADF rejects and KPSS does not. Otherwise it is log-differenced (×100, % m/m), or first-differenced for rates.</p>
+<div class="scroll">{{ stationarity_table|safe }}</div>
+<p class="note">Monthly BC CPI inflation rejects a unit root (ADF) but KPSS also rejects stationarity at 5%. This is consistent with a level shift in inflation in 2021–23. It is modelled once-differenced, the standard choice, and flagged here.</p>
+
+<h2 id="bvar">3. Bayesian VAR (Minnesota prior)</h2>
+<p><b>Variables</b> (Cholesky order): {{ bvar_vars }}. <b>Sample</b>: {{ bvar.Z.index.min().strftime('%Y-%m') }} to {{ bvar.origin.strftime('%Y-%m') }} ({{ bvar.Z|length }} months). <b>Lags</b>: p = {{ bvar.p }}, chosen by BIC. <b>Prior</b>: Minnesota by dummy observations (Normal-inverse-Wishart), overall tightness λ = 0.2, lag decay 1/l. The prior mean on the own first lag is 0 for differenced series. <b>COVID</b>: Mar–Aug 2020 are dropped as dependent observations but kept as lags (Schorfheide &amp; Song 2021).</p>
+<p class="note">The forecast origin is the last month in which all six variables are observed ({{ bvar.origin.strftime('%Y-%m') }}; quarterly population is the binding series). Data released since then are plotted as dots for comparison, not used in estimation.</p>
+<h3>Forecasts with 68% / 90% bands</h3>
+<img alt="BVAR forecast fan charts" src="data:image/png;base64,{{ fan_png }}">
+<div class="scroll">{{ forecast_table|safe }}</div>
+<h3>Impulse responses: +100bp policy-rate shock</h3>
+<p>Recursive (Cholesky) identification with the policy rate ordered after activity and prices and before the NHPI. The shock raises the rate by 100bp on impact. Because the model is estimated in rate <em>changes</em>, the rate path persists: the median cumulative rise is {{ "%.2f"|format(rate_path[6]) }} pp at 6 months and {{ "%.2f"|format(rate_path[24]) }} pp at 24 months. Responses for log variables are % deviations in levels (cumulated growth responses). Bands are posterior 68%/90%. {{ "%.0f"|format(100*bvar.irf_dropped) }}% of draws were explosive and discarded.</p>
+<img alt="Impulse responses to a 100bp rate shock" src="data:image/png;base64,{{ irf_png }}">
+<div class="scroll">{{ irf_table|safe }}</div>
+<p class="note">Median [5th, 95th percentile]. The IRFs depend on how the 2020 months are treated (compare the two rows for each variable). Activity rising after a "tightening" is a known artefact of recursive identification. It reflects the central bank raising rates when the economy is strong. Treat these as statistical associations, not causal policy effects.</p>
+
+<h2 id="housing">4. Housing module: error-correction model for the Vancouver NHPI</h2>
+<p>Long run: <code>log NHPI = a + b₁·mortgage5y + b₂·log AWE + b₃·popgrowth(y/y) + b₄·log starts(12-m sum)</code>, estimated by Dynamic OLS (±2 leads/lags of differences, HAC standard errors) on {{ housing.n }} months. Short run: monthly NHPI growth on the lagged deviation from the long run, two own lags and lagged regressor changes.</p>
+<ul>
+  <li>Engle-Granger cointegration test: statistic {{ "%.2f"|format(housing.eg_stat) }}, p = {{ "%.3f"|format(housing.eg_p) }}{% if housing.eg_p > 0.1 %}. <b>No evidence of cointegration</b>{% endif %}.</li>
+  <li>Speed of adjustment γ = {{ "%.4f"|format(housing.gamma) }} per month (SE {{ "%.4f"|format(housing.gamma_se) }}){% if housing.half_life == housing.half_life %}; implied half-life {{ "%.0f"|format(housing.half_life) }} months{% endif %}.</li>
+</ul>
+<img alt="Housing long-run elasticities" src="data:image/png;base64,{{ elasticity_png }}">
+<div class="scroll">{{ elasticity_table|safe }}</div>
+<p class="note">Elasticity = % change in NHPI per 1% change in the driver. Semi-elasticity = % change per 1 percentage point. Bars show 95% HAC intervals. The pre-2020 column is a structural-break check: large differences between samples mean the relation is not stable.</p>
+<img alt="NHPI actual vs long-run fitted" src="data:image/png;base64,{{ ecm_png }}">
+
+<h2 id="nowcast">5. Nowcast: current-quarter BC real GDP growth</h2>
+<p>Mixed-frequency dynamic factor model (statsmodels <code>DynamicFactorMQ</code>): one factor with AR(2) dynamics and AR(1) idiosyncratic errors. Monthly indicators are in growth rates; the quarterly target is q/q growth of Chow-Lin BC GDP, observed through {{ nowcast.last_target_q }}. The Kalman filter handles the ragged edge and the short retail and permit histories.</p>
+<img alt="Nowcast chart" src="data:image/png;base64,{{ nowcast_png }}">
+<div class="scroll">{{ nowcast_table|safe }}</div>
+<div class="scroll">{{ data_through|safe }}</div>
+<p class="note">The target is modelled. It is built from Canada GDP and BC employment, and both are also nowcast indicators. Agreement between the nowcast and the target is therefore partly mechanical. The only test against published BC data is the annual Chow-Lin check in Section 6.</p>
+
+<h2 id="validation">6. Validation</h2>
+{% if has_backtest %}
+<h3>BVAR: expanding-window out-of-sample backtest</h3>
+<p>Origins {{ bt_origins }}, monthly. At each origin the lag order and posterior are re-estimated using only data to that date. Errors are in levels (100×log for log variables, so roughly %; percentage points for rates). Baselines: random walk (no change) and AR(1) on the model's transformed series. Hit rate = share of forecasts that get the direction of change from the origin right. DM = Diebold-Mariano test vs random walk (Harvey correction).</p>
+<img alt="Relative RMSE vs random walk" src="data:image/png;base64,{{ backtest_png }}">
+<div class="scroll">{{ backtest_table|safe }}</div>
+<details><summary>Same table excluding forecast origins Dec 2019 – Jun 2021</summary><div class="scroll">{{ backtest_ex_table|safe }}</div></details>
+<p class="note">How to read this: values below 1 in the chart beat the random walk. Gains over AR(1) are small, so most of the BVAR's edge is basic persistence and drift, not cross-variable information. High hit rates for CPI, GDP and employment mostly reflect upward trends; a drift-only rule would score similarly. NHPI direction calls at 6–12 months are near or below a coin flip.</p>
+<h3>Nowcast backtest</h3>
+<img alt="Nowcast backtest" src="data:image/png;base64,{{ nowcast_bt_png }}">
+<div class="scroll">{{ nowcast_bt_table|safe }}</div>
+<p class="note">Pseudo-real-time only: final-vintage data, no publication lags, and a target built partly from the same indicators. These scores overstate how well the model would track true quarterly BC GDP.</p>
+<h3>Test against published data: Chow-Lin annual extrapolation</h3>
+<p>For each year, Chow-Lin is benchmarked to annual data up to the year before. That year is extrapolated from the monthly indicators and compared with published annual BC GDP growth. The naive benchmark repeats last year's growth.</p>
+<div class="scroll">{{ chowlin_scores|safe }}</div>
+<details><summary>Year-by-year</summary><div class="scroll">{{ chowlin_bt_table|safe }}</div></details>
+{% else %}
+<p>Backtests were skipped (<code>--no-backtest</code>).</p>
+{% endif %}
+
+<h2 id="caveats">7. Caveats</h2>
+<div class="caveat">
+<ul>
+  <li><b>New homes only.</b> The NHPI measures contractors' selling prices of <em>new</em> houses of unchanged quality: single, semi-detached and row houses (no condominium apartments). It does not cover resale homes, which dominate Vancouver transactions, and it is not a measure of the broader housing market.</li>
+  <li><b>Not a property valuation.</b> This is a trend and scenario tool for regional aggregates. It says nothing about the value of any individual property.</li>
+  <li><b>Revisions.</b> GDP, LFS (annual revisions and periodic rebasing), SEPH earnings, retail sales and population estimates are all revised. The backtests use today's vintage, so they understate real-time forecast errors. STL seasonal factors and the Chow-Lin estimate are fitted on the full sample, so they also use information that would not have been available at each origin.</li>
+  <li><b>Modelled BC GDP.</b> StatCan publishes no monthly or quarterly BC real GDP. The monthly series and the nowcast target come from Chow-Lin and are only as good as the link between BC output and its indicators (Canada GDP, BC employment). Months after {{ chow_lin.benchmarked_until.year }} are not benchmarked.</li>
+  <li><b>Structural breaks.</b> The 2020 pandemic (huge, short-lived swings; Mar–Aug 2020 excluded from BVAR estimation) and the 2022–23 tightening (the fastest since the 1990s, after a long near-zero period) break the linear, constant-parameter assumptions. 2009–15 and 2020–21 sat at or near the effective lower bound, where rate shocks are not well defined. The housing relation changes sharply between samples.</li>
+  <li><b>Identification.</b> Cholesky IRFs depend on the variable ordering and show standard puzzles (activity rising after tightening). They are scenario inputs, not causal estimates.</li>
+  <li><b>No cointegration in the housing module.</b> The long-run elasticities come from a levels regression that fails a cointegration test. They describe co-movement in this sample, not a stable demand relation.</li>
+  <li><b>Interpolated data.</b> Population growth is interpolated from quarterly estimates, so its monthly dynamics are artificial.</li>
+  <li><b>Bands.</b> Forecast bands reflect parameter and shock uncertainty within the model, not model uncertainty, data revisions or breaks. Treat them as lower bounds on true uncertainty.</li>
+</ul>
+</div>
+<p class="note">Generated by <code>python run.py</code>. Source data: Statistics Canada (Statistics Canada Open Licence) and the Bank of Canada. Figures are not official statistics.</p>
+</main>
+</body>
+</html>
