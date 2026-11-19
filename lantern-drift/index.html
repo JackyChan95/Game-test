@@ -16,7 +16,7 @@
     --ink: #e9f1f7;
     --mist: rgba(233, 241, 247, 0.62);
     --faint: rgba(233, 241, 247, 0.14);
-    --glow: #ffd47e;
+    --glow: #ffe2a8;
     --display: "Comfortaa", "Nunito", ui-rounded, system-ui, sans-serif;
     --body: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
     color-scheme: dark;
@@ -82,14 +82,14 @@
     font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: 0.06em;
     color: var(--night); background: var(--glow);
     border: 0; border-radius: 999px; padding: 15px 42px; cursor: pointer;
-    box-shadow: 0 0 36px rgba(255, 212, 126, 0.45);
+    box-shadow: 0 0 36px rgba(255, 226, 168, 0.45);
   }
   .spectrum { display: flex; align-items: center; gap: 10px; }
   .spectrum i { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 12px currentColor; background: currentColor; }
-  .spectrum i:nth-child(1) { color: #ff6b6b; } .spectrum i:nth-child(2) { color: #ff9f43; }
-  .spectrum i:nth-child(3) { color: #ffe066; } .spectrum i:nth-child(4) { color: #6ee07a; }
-  .spectrum i:nth-child(5) { color: #4cb8ff; } .spectrum i:nth-child(6) { color: #6d6cff; }
-  .spectrum i:nth-child(7) { color: #d184ff; }
+  .spectrum i:nth-child(1) { color: #ffa8a8; } .spectrum i:nth-child(2) { color: #ffc799; }
+  .spectrum i:nth-child(3) { color: #fff0a3; } .spectrum i:nth-child(4) { color: #b2efb4; }
+  .spectrum i:nth-child(5) { color: #a3d8ff; } .spectrum i:nth-child(6) { color: #aeaaff; }
+  .spectrum i:nth-child(7) { color: #e7b6ff; }
   .cancel {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
     display: flex; justify-content: center;
@@ -167,7 +167,7 @@
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Spectrum order matters: rainbow chains step through these in order (red → violet, either way, wrapping round).
-  const PALETTE = ['#ff6b6b', '#ff9f43', '#ffe066', '#6ee07a', '#4cb8ff', '#6d6cff', '#d184ff', '#ffffff'];
+  const PALETTE = ['#ffa8a8', '#ffc799', '#fff0a3', '#b2efb4', '#a3d8ff', '#aeaaff', '#e7b6ff', '#ffffff'];
   const NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
   const HUES = 7, WILD = 7;
   const COMBO_WINDOW = 4.2;   // seconds between releases to keep flow going
@@ -202,8 +202,8 @@
     const grd = g.createRadialGradient(h, h, 0, h, h, h);
     grd.addColorStop(0, 'rgba(255,255,255,1)');
     grd.addColorStop(0.1, rgba(hex, 1));
-    grd.addColorStop(BODY - 0.02, rgba(hex, 0.92));
-    grd.addColorStop(BODY, rgba(hex, 0.38));
+    grd.addColorStop(BODY - 0.02, rgba(hex, 1));
+    grd.addColorStop(BODY, rgba(hex, 0.32));
     grd.addColorStop(0.55, rgba(hex, 0.12));
     grd.addColorStop(1, rgba(hex, 0));
     g.fillStyle = grd;
