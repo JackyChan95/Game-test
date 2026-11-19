@@ -29,7 +29,14 @@ While you drag, the loose thread turns faint and dashed and the lanterns in the 
 - **Rainbow chain:** link each lantern to the next colour in the spectrum (red → orange → yellow …).
   It works in either direction and wraps round from violet back to red.
   Your first link decides which kind of chain it is. Lanterns you can link next (right colour, clear line) pulse with a faint ring.
-- **Undo:** slide straight back along the thread to drop the last link. Swiping across an earlier lantern on the way somewhere else doesn't undo.
+- **Backtrack:** changed your mind mid-chain? Three ways out:
+  - *Undo one link:* slide straight back along the thread to the previous lantern.
+    Swiping across an earlier lantern on the way somewhere else doesn't undo.
+  - *Rewind:* rest your finger on any earlier lantern in the chain. A ring fills, then the chain
+    rewinds to that lantern and the rest drift free.
+  - *Cancel:* a "Release here to cancel" zone appears at the bottom while you drag.
+    Let go there and the whole thread is dropped, with nothing released and no score.
+    Lanterns never drift into that strip.
 - **Score:** a same-colour chain of *n* is worth `n² × 10`; a rainbow chain `n² × 15`.
   Each full red-to-violet run adds +350 (**full spectrum**), and clearing every lantern of one colour adds +100.
   All of it is multiplied by flow.

@@ -90,8 +90,28 @@
   .spectrum i:nth-child(3) { color: #ffe066; } .spectrum i:nth-child(4) { color: #6ee07a; }
   .spectrum i:nth-child(5) { color: #4cb8ff; } .spectrum i:nth-child(6) { color: #6d6cff; }
   .spectrum i:nth-child(7) { color: #d184ff; }
+  .cancel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+    display: flex; justify-content: center;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    pointer-events: none;
+  }
+  .cancel span {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 46px; padding: 0 22px; border-radius: 999px;
+    border: 1px dashed var(--faint); color: var(--mist);
+    font-size: 14px; letter-spacing: 0.04em;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.25s ease, transform 0.25s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+  .cancel.show span { opacity: 1; transform: none; }
+  .cancel.hot span { background: rgba(233, 241, 247, 0.14); color: var(--ink); border-style: solid; border-color: rgba(233, 241, 247, 0.5); }
+  .cancel svg { width: 16px; height: 16px; }
+  .tip { max-width: 32ch; margin: 0; color: var(--mist); font-size: 13px; line-height: 1.5; }
   .best { font-size: 13px; color: var(--mist); letter-spacing: 0.06em; min-height: 1em; margin: 0; }
-  @media (prefers-reduced-motion: reduce) { .overlay, .flow { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .overlay, .flow, .cancel span { transition: none; } }
 </style>
 
 <canvas id="pond" aria-label="Lantern Drift play area"></canvas>
@@ -112,10 +132,15 @@
   </div>
 </div>
 
+<div class="cancel" id="cancel" aria-hidden="true">
+  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg><b id="cancelText" style="font-weight:600">Release here to cancel</b></span>
+</div>
+
 <div class="overlay" id="overlay">
   <h1 class="title">Lantern <span>Drift</span></h1>
   <p class="how">Link <b>lanterns of one colour</b>, or follow the <b>rainbow</b> from one colour to the next. The thread can't pass through other lanterns, so watch for gaps as they drift.</p>
   <div class="spectrum" aria-label="Rainbow order: red, orange, yellow, green, blue, indigo, violet"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <p class="tip">Changed your mind? Slide back to undo a link, rest on an earlier lantern to rewind to it, or drop the thread at the bottom to cancel.</p>
   <button class="begin" id="begin" type="button">Begin</button>
   <p class="best" id="best"></p>
 </div>
@@ -136,6 +161,8 @@
   const bestEl = document.getElementById('best');
   const soundBtn = document.getElementById('soundBtn');
   const soundIcon = document.getElementById('soundIcon');
+  const cancelEl = document.getElementById('cancel');
+  const cancelText = document.getElementById('cancelText');
 
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -159,6 +186,10 @@
   let px = 0, py = 0, lastPx = 0, lastPy = 0;
   let time = 0, worldSpeed = 1, warmth = 0;
   let blockedNow = [];
+  let FLOOR = 600;                   // lanterns stay above the cancel zone at the bottom
+  let inCancel = false;              // finger is over the cancel zone
+  let hoverOrb = null, hoverT = 0;   // resting on an earlier chain lantern rewinds to it
+  const REWIND_T = 0.4;
   let muted = store.get('muted', false);
 
   // Each colour gets a pre-rendered glow sprite so drawing stays cheap on phones.
@@ -194,12 +225,13 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     R = clamp(Math.min(W, H) * 0.06, 20, 36);
     TOP = hud.getBoundingClientRect().bottom + 4;
-    const area = W * (H - TOP);
+    FLOOR = cancelEl.getBoundingClientRect().top - 4; // layout box, unaffected by the pill's slide-in transform
+    const area = W * (FLOOR - TOP);
     TARGET = clamp(Math.floor(area / (R * R * 13)), 16, 38);
     sparks = Array.from({ length: reduceMotion ? 18 : 42 }, () => ({
       x: Math.random() * W, y: Math.random() * H, p: Math.random() * 6.28, s: rand(0.4, 1.4),
     }));
-    for (const o of orbs) { o.x = clamp(o.x, R, W - R); o.y = clamp(o.y, TOP + R, H - R); }
+    for (const o of orbs) { o.x = clamp(o.x, R, W - R); o.y = clamp(o.y, TOP + R, FLOOR - R); }
   }
 
   // ---------- orbs ----------
@@ -220,7 +252,7 @@
     if (x == null) {
       let bestPos = null, bestGap = -1;
       for (let i = 0; i < 24; i++) {
-        const cx = rand(R * 1.2, W - R * 1.2), cy = rand(TOP + R * 1.2, H - R * 1.2);
+        const cx = rand(R * 1.2, W - R * 1.2), cy = rand(TOP + R * 1.2, FLOOR - R * 1.2);
         let gap = Infinity;
         for (const o of orbs) gap = Math.min(gap, Math.hypot(o.x - cx, o.y - cy));
         if (gap > bestGap) { bestGap = gap; bestPos = [cx, cy]; }
@@ -299,13 +331,17 @@
     const steps = Math.max(1, Math.ceil(Math.hypot(x - lastPx, y - lastPy) / (R * 0.45)));
     for (let i = 1; i <= steps; i++) tryAt(lastPx + (x - lastPx) * i / steps, lastPy + (y - lastPy) * i / steps);
     px = lastPx = x; py = lastPy = y;
+    inCancel = chain.length > 0 && y > FLOOR;
   });
 
   const endDrag = (e) => {
     if (!dragging || e.pointerId !== pointerId) return;
     dragging = false; pointerId = null;
-    if (chain.length >= 2) release();
+    hoverOrb = null; hoverT = 0;
+    if (inCancel) cancelChain();
+    else if (chain.length >= 2) release();
     else { for (const o of chain) o.held = false; chain = []; }
+    inCancel = false;
   };
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
@@ -329,6 +365,7 @@
     return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
   }
   function tryAt(x, y) {
+    if (y > FLOOR) return; // over the cancel zone: nothing links here
     const n = chain.length;
     if (n >= 2) stray = Math.max(stray, segDist(x, y, chain[n - 1], chain[n - 2]));
     const o = orbAt(x, y, 0.8); // tight while dragging, so brushing past a lantern doesn't grab it
@@ -353,6 +390,34 @@
     audio.note(chain.length - 1, 1);
     ripples.push({ x: o.x, y: o.y, r: R, a: 0.35, w: 1.5, c: PALETTE[o.c] });
     if (navigator.vibrate) { try { navigator.vibrate(chain.length > 6 ? 14 : 8); } catch (e) {} }
+  }
+
+  // ---------- backtracking ----------
+  // Rewind the chain so it ends at index keep-1 (the lanterns after it drift free again).
+  function rewindTo(keep) {
+    const dropped = chain.splice(keep);
+    if (!dropped.length) return;
+    for (const o of dropped) o.held = false;
+    stray = 0;
+    const end = chain[chain.length - 1];
+    ripples.push({ x: end.x, y: end.y, r: R * 1.4, a: 0.5, w: 1.5, grow: -12 });
+    audio.unwind(chain.length, dropped.length);
+    if (navigator.vibrate) { try { navigator.vibrate([6, 40, 6]); } catch (e) {} }
+  }
+
+  // Let the whole thread go without releasing anything.
+  function cancelChain() {
+    const n = chain.length;
+    for (const o of chain) {
+      o.held = false;
+      ripples.push({ x: o.x, y: o.y, r: R * 1.2, a: 0.3, w: 1, grow: -10 });
+    }
+    if (n) {
+      const last = chain[n - 1];
+      texts.push({ x: last.x, y: last.y - R * 1.6, s: 'let go', a: 0.8, vy: -10, size: 14, c: '#e9f1f7', font: 'display' });
+      audio.unwind(0, n);
+    }
+    chain = [];
   }
 
   // ---------- releasing ----------
@@ -430,6 +495,17 @@
     const sdt = dt * worldSpeed * (reduceMotion ? 0.5 : 1);
     time += dt;
 
+    // Resting a finger on an earlier lantern of the chain rewinds back to it.
+    if (dragging && !inCancel && chain.length > 1) {
+      const o = orbAt(px, py, 0.9);
+      const idx = o ? chain.indexOf(o) : -1;
+      if (idx >= 0 && idx < chain.length - 1) {
+        if (hoverOrb !== o) { hoverOrb = o; hoverT = 0; }
+        hoverT += dt;
+        if (hoverT >= REWIND_T) { rewindTo(idx + 1); hoverOrb = null; hoverT = 0; }
+      } else { hoverOrb = null; hoverT = 0; }
+    } else { hoverOrb = null; hoverT = 0; }
+
     for (let i = tasks.length - 1; i >= 0; i--) {
       if (tasks[i].at <= time) { const t = tasks[i]; tasks.splice(i, 1); t.fn(); }
     }
@@ -463,7 +539,7 @@
       if (o.x < m) o.vx += (m - o.x) * sdt * 3;
       if (o.x > W - m) o.vx -= (o.x - (W - m)) * sdt * 3;
       if (o.y < TOP + m) o.vy += (TOP + m - o.y) * sdt * 3;
-      if (o.y > H - m) o.vy -= (o.y - (H - m)) * sdt * 3;
+      if (o.y > FLOOR - m) o.vy -= (o.y - (FLOOR - m)) * sdt * 3;
       o.x += o.vx * sdt; o.y += o.vy * sdt;
     }
 
@@ -477,7 +553,7 @@
     for (let i = ripples.length - 1; i >= 0; i--) {
       const r = ripples[i];
       r.r += (r.grow || 40) * dt; r.a -= dt * 0.6;
-      if (r.a <= 0) ripples.splice(i, 1);
+      if (r.a <= 0 || r.r <= 1) ripples.splice(i, 1);
     }
     for (let i = texts.length - 1; i >= 0; i--) {
       const t = texts[i];
@@ -543,6 +619,7 @@
 
     // Chain thread.
     if (!chain.length) blockedNow = [];
+    ctx.globalAlpha = inCancel ? 0.3 : 1; // over the cancel zone the thread goes slack
     if (chain.length) {
       // Each segment takes the colour of the lantern it reaches, so rainbow threads shade through the spectrum.
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -570,6 +647,13 @@
         ctx.setLineDash([]);
         blockedNow = blocked;
       }
+    }
+    ctx.globalAlpha = 1;
+    if (hoverOrb) { // rewind progress ring
+      ctx.strokeStyle = 'rgba(233,241,247,0.9)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(hoverOrb.x, hoverOrb.y, R * 1.45, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, hoverT / REWIND_T));
+      ctx.stroke();
     }
 
     // Lanterns.
@@ -620,6 +704,9 @@
     ctx.globalAlpha = 1;
 
     // HUD values.
+    cancelEl.classList.toggle('show', dragging && chain.length > 0);
+    cancelEl.classList.toggle('hot', inCancel);
+    cancelText.textContent = inCancel ? 'Let go to cancel' : 'Release here to cancel';
     scoreEl.textContent = Math.round(shownScore).toLocaleString();
     const on = combo >= 2;
     flowEl.classList.toggle('on', on);
@@ -717,6 +804,11 @@
         const root = Math.min(c, 6);
         [0, 2, 4, 7].slice(0, n >= 5 ? 4 : 3).forEach((s, i) => tone(freq(root + s - 5) , t + i * 0.06, 0.07, 3.2));
       },
+      unwind(from, count) {
+        if (!ac) return;
+        const t = ac.currentTime;
+        for (let i = 0; i < Math.min(count, 5); i++) tone(freq(from + count - 1 - i) / 2, t + i * 0.05, 0.05 * (1 - i * 0.15), 0.9);
+      },
       spectrum() {
         if (!ac) return;
         const t = ac.currentTime;
@@ -771,6 +863,6 @@
   if (best > 0) bestEl.textContent = `Your brightest pond: ${best.toLocaleString()}`;
   drawSoundIcon();
   requestAnimationFrame(frame);
-  if (/[?&]debug\b/.test(location.search)) window.__ld = { get orbs() { return orbs; }, get score() { return score; }, get combo() { return combo; }, chainState };
+  if (/[?&]debug\b/.test(location.search)) window.__ld = { get orbs() { return orbs; }, get score() { return score; }, get combo() { return combo; }, chainState, canLink, clearPath, get chain() { return chain; }, get FLOOR() { return FLOOR; } };
 })();
 </script>
