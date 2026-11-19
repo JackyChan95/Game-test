@@ -19,13 +19,20 @@ python3 -m http.server 8000   # then open http://<your-computer-ip>:8000 on the 
 
 ## How it plays
 
-- **Chain:** touch a lantern and drag through neighbours of the same colour. Slide back to undo the last link.
-  Lanterns you can reach next pulse with a faint ring, and the world slows down while you draw.
-- **Score:** a chain of *n* lanterns is worth `n² × 10`, times your flow multiplier.
+There are seven lantern colours, in rainbow order: red, orange, yellow, green, blue, indigo, violet.
+Touch a lantern and drag to build a chain. There's no distance limit, so any matching lantern on the pond can join.
+
+- **Same-colour chain:** link lanterns that are all one colour.
+- **Rainbow chain:** link each lantern to the next colour in the spectrum (red → orange → yellow …).
+  It works in either direction and wraps round from violet back to red.
+  Your first link decides which kind of chain it is. Lanterns that fit next pulse with a faint ring.
+- **Undo:** slide straight back along the thread to drop the last link. Swiping across an earlier lantern on the way somewhere else doesn't undo.
+- **Score:** a same-colour chain of *n* is worth `n² × 10`; a rainbow chain `n² × 15`.
+  Each full red-to-violet run adds +350 (**full spectrum**), and clearing every lantern of one colour adds +100.
+  All of it is multiplied by flow.
 - **Flow (the combo):** release another chain within about 4 seconds to raise flow (×2, ×3, …).
   Each step adds +25% to points, lifts the melody, and warms the colour of the water.
-- **Spirit lantern:** chains of 5+ leave a white lantern behind that links with any colour.
-- **Tide bloom:** chains of 8+ also release every other lantern of that colour on screen.
+- **Spirit lantern:** chains of 5+ leave a white lantern that can stand in for any colour. A full spectrum leaves an extra one.
 - **Sound:** each link plays the next note of a pentatonic scale over a soft ambient pad.
   The speaker button mutes it. Android phones also give a light haptic tick per link.
 

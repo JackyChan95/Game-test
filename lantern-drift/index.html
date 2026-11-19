@@ -84,6 +84,12 @@
     border: 0; border-radius: 999px; padding: 15px 42px; cursor: pointer;
     box-shadow: 0 0 36px rgba(255, 212, 126, 0.45);
   }
+  .spectrum { display: flex; align-items: center; gap: 10px; }
+  .spectrum i { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 12px currentColor; background: currentColor; }
+  .spectrum i:nth-child(1) { color: #ff6b6b; } .spectrum i:nth-child(2) { color: #ff9f43; }
+  .spectrum i:nth-child(3) { color: #ffe066; } .spectrum i:nth-child(4) { color: #6ee07a; }
+  .spectrum i:nth-child(5) { color: #4cb8ff; } .spectrum i:nth-child(6) { color: #6d6cff; }
+  .spectrum i:nth-child(7) { color: #d184ff; }
   .best { font-size: 13px; color: var(--mist); letter-spacing: 0.06em; min-height: 1em; margin: 0; }
   @media (prefers-reduced-motion: reduce) { .overlay, .flow { transition: none; } }
 </style>
@@ -108,7 +114,8 @@
 
 <div class="overlay" id="overlay">
   <h1 class="title">Lantern <span>Drift</span></h1>
-  <p class="how">Drag through <b>lanterns of one colour</b> to release them. Longer chains bloom brighter. Keep a gentle rhythm to build <b>flow</b>.</p>
+  <p class="how">Drag through <b>lanterns of one colour</b>, anywhere on the pond. Or follow the <b>rainbow</b>, one colour to the next. Keep a gentle rhythm to build <b>flow</b>.</p>
+  <div class="spectrum" aria-label="Rainbow order: red, orange, yellow, green, blue, indigo, violet"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <button class="begin" id="begin" type="button">Begin</button>
   <p class="best" id="best"></p>
 </div>
@@ -132,8 +139,10 @@
 
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const PALETTE = ['#ff8f7a', '#ffd166', '#74e89a', '#6fa2ff', '#d79bff', '#ffffff'];
-  const WILD = 5;
+  // Spectrum order matters: rainbow chains step through these in order (red → violet, either way, wrapping round).
+  const PALETTE = ['#ff6b6b', '#ff9f43', '#ffe066', '#6ee07a', '#4cb8ff', '#6d6cff', '#d184ff', '#ffffff'];
+  const NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+  const HUES = 7, WILD = 7;
   const COMBO_WINDOW = 4.2;   // seconds between releases to keep flow going
   const WORDS = { 4: 'nice', 5: 'lovely', 6: 'serene', 7: 'radiant' };
 
@@ -142,7 +151,7 @@
     set(k, v) { try { localStorage.setItem('lantern-drift:' + k, JSON.stringify(v)); } catch (e) {} },
   };
 
-  let W = 0, H = 0, DPR = 1, R = 28, TOP = 80, LINK = 100, TARGET = 24;
+  let W = 0, H = 0, DPR = 1, R = 28, TOP = 80, TARGET = 24;
   let orbs = [], chain = [], particles = [], ripples = [], texts = [], tasks = [], sparks = [];
   let score = 0, shownScore = 0, best = store.get('best', 0);
   let combo = 0, comboLeft = 0, lastRelease = -99, peakCombo = 0;
@@ -176,7 +185,6 @@
   }
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -184,10 +192,9 @@
     canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     R = clamp(Math.min(W, H) * 0.06, 20, 36);
-    LINK = R * 3.9;
     TOP = hud.getBoundingClientRect().bottom + 4;
     const area = W * (H - TOP);
-    TARGET = clamp(Math.floor(area / (R * R * 15)), 14, 34);
+    TARGET = clamp(Math.floor(area / (R * R * 13)), 16, 38);
     sparks = Array.from({ length: reduceMotion ? 18 : 42 }, () => ({
       x: Math.random() * W, y: Math.random() * H, p: Math.random() * 6.28, s: rand(0.4, 1.4),
     }));
@@ -195,13 +202,16 @@
   }
 
   // ---------- orbs ----------
-  function pickColor(x, y) {
-    // Lean toward a neighbour's colour so chains keep forming naturally.
-    if (Math.random() < 0.5) {
-      const near = orbs.filter((o) => o.c !== WILD && Math.hypot(o.x - x, o.y - y) < LINK * 1.6);
-      if (near.length) return near[(Math.random() * near.length) | 0].c;
+  function pickColor() {
+    // Mostly random, nudged toward whichever colours are scarce so every colour stays in play.
+    if (Math.random() < 0.45) {
+      const counts = new Array(HUES).fill(0);
+      for (const o of orbs) if (o.c < HUES) counts[o.c]++;
+      const low = Math.min(...counts);
+      const scarce = counts.map((n, i) => (n === low ? i : -1)).filter((i) => i >= 0);
+      return scarce[(Math.random() * scarce.length) | 0];
     }
-    return (Math.random() * 5) | 0;
+    return (Math.random() * HUES) | 0;
   }
 
   function spawnOrb(opts = {}) {
@@ -219,7 +229,7 @@
     }
     orbs.push({
       x, y, vx: 0, vy: 0,
-      c: opts.c != null ? opts.c : pickColor(x, y),
+      c: opts.c != null ? opts.c : pickColor(),
       phase: Math.random() * 1000, born: time, held: false, scale: 0,
     });
   }
@@ -233,13 +243,38 @@
     return hit;
   }
 
-  function chainColor() {
-    for (const o of chain) if (o.c !== WILD) return o.c;
-    return null;
+  // A chain is either 'same' (one colour) or 'rainbow' (each lantern the next spectrum colour, dir ±1).
+  // The mode is set by the first two coloured links. Spirit lanterns stand in for whatever comes next.
+  const step = (c, d) => (c + d + HUES) % HUES;
+  function chainState(list = chain) {
+    let mode = null, dir = 0, last = null;
+    for (const o of list) {
+      let eff = o.c;
+      if (o.c === WILD) eff = last === null ? null : mode === 'rainbow' ? step(last, dir) : last;
+      else if (last !== null && mode === null) {
+        if (eff === last) mode = 'same';
+        else { mode = 'rainbow'; dir = eff === step(last, 1) ? 1 : -1; }
+      }
+      if (eff !== null) last = eff;
+    }
+    return { mode, dir, last };
   }
-  function canLink(o) {
-    const col = chainColor();
-    return o.c === WILD || col === null || o.c === col;
+  function canLink(o, st = chainState()) {
+    if (o.c === WILD || st.last === null) return true;
+    if (st.mode === 'same') return o.c === st.last;
+    if (st.mode === 'rainbow') return o.c === step(st.last, st.dir);
+    return o.c === st.last || o.c === step(st.last, 1) || o.c === step(st.last, -1);
+  }
+  function chainColor() {
+    const st = chainState();
+    return st.mode === 'rainbow' ? null : st.last;
+  }
+  // The colour a chained lantern is playing as (spirit lanterns take on their neighbour's role).
+  function effColour(o) {
+    if (o.c !== WILD) return o.c;
+    const i = chain.indexOf(o);
+    const st = chainState(chain.slice(0, i + 1));
+    return st.last ?? WILD;
   }
 
   // ---------- input ----------
@@ -274,22 +309,35 @@
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
+  // How far the finger has strayed from the last thread segment. Undo only counts when you slide
+  // straight back along the thread; swiping across an earlier lantern on the way elsewhere doesn't.
+  let stray = 0;
+  function segDist(x, y, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy || 1;
+    const t = clamp(((x - a.x) * dx + (y - a.y) * dy) / L, 0, 1);
+    return Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+  }
   function tryAt(x, y) {
-    const o = orbAt(x, y, 1.05);
-    if (!o) return;
     const n = chain.length;
+    if (n >= 2) stray = Math.max(stray, segDist(x, y, chain[n - 1], chain[n - 2]));
+    const o = orbAt(x, y, 0.8); // tight while dragging, so brushing past a lantern doesn't grab it
+    if (!o) return;
     if (o === chain[n - 1]) return;
-    if (n >= 2 && o === chain[n - 2]) { // slide back to undo the last link
-      chain.pop().held = false;
-      audio.note(chain.length - 1, 0.5);
+    if (n >= 2 && o === chain[n - 2]) {
+      if (stray < R * 1.3) { // slid back along the thread: undo the last link
+        chain.pop().held = false;
+        stray = 0;
+        audio.note(chain.length - 1, 0.5);
+      }
       return;
     }
-    if (o.held || !canLink(o) || dist(chain[n - 1], o) > LINK) return;
+    if (o.held || !canLink(o)) return; // any matching lantern, however far away
     addToChain(o);
   }
 
   function addToChain(o) {
     o.held = true;
+    stray = 0;
     chain.push(o);
     audio.note(chain.length - 1, 1);
     ripples.push({ x: o.x, y: o.y, r: R, a: 0.35, w: 1.5, c: PALETTE[o.c] });
@@ -299,14 +347,18 @@
   // ---------- releasing ----------
   function release() {
     const n = chain.length;
-    const col = chainColor() ?? WILD;
+    const st = chainState();
+    const rainbow = st.mode === 'rainbow';
+    const col = rainbow ? WILD : st.last ?? WILD;
     const last = chain[n - 1];
+    const spectra = rainbow ? Math.floor(n / HUES) : 0;
     combo = time - lastRelease < COMBO_WINDOW ? combo + 1 : 1;
     lastRelease = time;
     comboLeft = COMBO_WINDOW;
     peakCombo = Math.max(peakCombo, combo);
     const mult = 1 + (combo - 1) * 0.25;
-    const pts = Math.round(n * n * 10 * mult);
+    // Rainbow chains are worth half again, and each full red-to-violet run adds a big bonus.
+    const pts = Math.round((n * n * (rainbow ? 15 : 10) + spectra * 350) * mult);
     addScore(pts);
 
     const popped = chain.slice();
@@ -314,7 +366,10 @@
     popped.forEach((o, i) => later(i * 0.055, () => popOrb(o, 1)));
     audio.bloom(n, combo);
 
-    const word = n >= 8 ? 'tide bloom' : WORDS[n];
+    const gathered = !rainbow && col !== WILD && n >= 3 && !orbs.some((o) => o.c === col && !o.held);
+    const word = spectra ? (spectra > 1 ? `full spectrum ×${spectra}` : 'full spectrum')
+      : gathered ? `every ${NAMES[col]} gathered`
+      : rainbow && n >= 3 ? 'rainbow' : WORDS[n];
     texts.push({ x: last.x, y: last.y - R * 1.4, s: '+' + pts, a: 1, vy: -26, size: 18 + Math.min(n, 10), c: PALETTE[col] });
     if (word) texts.push({ x: last.x, y: last.y - R * 2.5, s: word, a: 1, vy: -18, size: 15, c: '#e9f1f7', font: 'display' });
 
@@ -324,13 +379,16 @@
       audio.chime();
     });
 
-    // Eight or more: every lantern of that colour drifts up and releases too.
-    if (n >= 8 && col !== WILD) {
-      later(n * 0.055 + 0.35, () => {
-        const same = orbs.filter((o) => o.c === col && !o.held);
-        same.forEach((o, i) => later(i * 0.07, () => { popOrb(o, 0.7); addScore(Math.round(15 * mult)); audio.note(i + 3, 0.45); }));
+    // A full spectrum sends a ring of rainbow light across the pond and leaves extra spirit lanterns.
+    if (spectra) {
+      later(n * 0.055 + 0.1, () => {
+        for (let k = 0; k < HUES; k++) ripples.push({ x: last.x, y: last.y, r: R + k * 9, a: 0.7, w: 3, c: PALETTE[k], grow: 160 });
+        audio.spectrum();
       });
+      for (let k = 1; k < Math.min(spectra + 1, 3); k++) later(n * 0.055 + 0.3 + k * 0.2, () => spawnOrb({ c: WILD }));
     }
+    // Clearing every lantern of one colour gives a small bonus.
+    if (gathered) addScore(Math.round(100 * mult));
   }
 
   function popOrb(o, power) {
@@ -474,21 +532,25 @@
 
     // Chain thread.
     if (chain.length) {
-      const col = PALETTE[chainColor() ?? WILD];
+      // Each segment takes the colour of the lantern it reaches, so rainbow threads shade through the spectrum.
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const pts = chain.map((o) => [o.x, o.y, effColour(o)]);
+      if (dragging) pts.push([px, py, pts[pts.length - 1][2]]);
       for (const [w, a] of [[R * 0.7, 0.14], [R * 0.32, 0.35], [R * 0.12, 0.95]]) {
-        ctx.strokeStyle = rgba(col, a); ctx.lineWidth = w;
-        ctx.beginPath();
-        ctx.moveTo(chain[0].x, chain[0].y);
-        for (let i = 1; i < chain.length; i++) ctx.lineTo(chain[i].x, chain[i].y);
-        if (dragging) ctx.lineTo(px, py);
-        ctx.stroke();
+        ctx.lineWidth = w;
+        for (let i = 1; i < pts.length; i++) {
+          const [x0, y0, c0] = pts[i - 1], [x1, y1, c1] = pts[i];
+          const g = ctx.createLinearGradient(x0, y0, x1, y1);
+          g.addColorStop(0, rgba(PALETTE[c0], a)); g.addColorStop(1, rgba(PALETTE[c1], a));
+          ctx.strokeStyle = g;
+          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        }
       }
     }
 
     // Lanterns.
     ctx.globalCompositeOperation = 'source-over';
-    const last = chain[chain.length - 1];
+    const st = chain.length ? chainState() : null;
     for (const o of orbs) {
       const born = clamp((time - o.born) / 0.7, 0, 1);
       const ease = 1 - Math.pow(1 - born, 3);
@@ -498,15 +560,15 @@
       ctx.drawImage(sprites[o.c], o.x - size / 2, o.y - size / 2, size, size);
 
       // Hint: lanterns you could link to next pulse with a faint ring.
-      if (last && !o.held && canLink(o) && dist(last, o) <= LINK) {
+      if (st && !o.held && canLink(o, st)) {
         ctx.globalAlpha = 0.35 + 0.25 * Math.sin(time * 5);
         ctx.strokeStyle = PALETTE[o.c]; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(o.x, o.y, R * 1.25, 0, 6.283); ctx.stroke();
       }
-      if (o.c === WILD) { // five tiny colour motes circle the spirit lantern
+      if (o.c === WILD) { // seven tiny rainbow motes circle the spirit lantern
         ctx.globalAlpha = ease;
-        for (let k = 0; k < 5; k++) {
-          const a = time * 1.2 + k * 1.2566;
+        for (let k = 0; k < HUES; k++) {
+          const a = time * 1.2 + k * (Math.PI * 2 / HUES);
           ctx.fillStyle = PALETTE[k];
           ctx.beginPath(); ctx.arc(o.x + Math.cos(a) * R * 0.95, o.y + Math.sin(a) * R * 0.95, R * 0.11, 0, 6.283); ctx.fill();
         }
@@ -630,6 +692,11 @@
         const root = Math.min(c, 6);
         [0, 2, 4, 7].slice(0, n >= 5 ? 4 : 3).forEach((s, i) => tone(freq(root + s - 5) , t + i * 0.06, 0.07, 3.2));
       },
+      spectrum() {
+        if (!ac) return;
+        const t = ac.currentTime;
+        for (let i = 0; i < 8; i++) tone(freq(5 + i), t + i * 0.07, 0.06, 2.4);
+      },
       chime() {
         if (!ac) return;
         const t = ac.currentTime;
@@ -679,6 +746,6 @@
   if (best > 0) bestEl.textContent = `Your brightest pond: ${best.toLocaleString()}`;
   drawSoundIcon();
   requestAnimationFrame(frame);
-  if (/[?&]debug\b/.test(location.search)) window.__ld = { get orbs() { return orbs; }, get score() { return score; }, get combo() { return combo; }, LINK: () => LINK };
+  if (/[?&]debug\b/.test(location.search)) window.__ld = { get orbs() { return orbs; }, get score() { return score; }, get combo() { return combo; }, chainState };
 })();
 </script>
