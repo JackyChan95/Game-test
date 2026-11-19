@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { applyAttacks, collectAttacks, findTarget, moveUnits, resolveClash } from '../combat';
 import { createRng } from '../rng';
+import { syncOwners } from '../board';
 import { emptyGame, highRng, lowRng, putBunker, putUnit } from './helpers';
 
 describe('movement', () => {
@@ -46,12 +47,22 @@ describe('movement', () => {
     expect(s.lanes[0][2].units).toHaveLength(1);
   });
 
-  it('a tile left empty becomes neutral', () => {
+  it('tiles behind the furthest unit stay held after it moves on', () => {
     const s = emptyGame();
-    putUnit(s, 'player', 0, 2, 'grunt');
+    putUnit(s, 'player', 0, 1, 'grunt');
     moveUnits(s, 'player');
-    expect(s.lanes[0][2].owner).toBeNull();
-    expect(s.lanes[0][3].owner).toBe('player');
+    moveUnits(s, 'player');
+    expect(s.lanes[0].map((t) => t.owner)).toEqual(['player', 'player', 'player', 'player', null]);
+  });
+
+  it('tiles go neutral when the front units on both sides fall', () => {
+    const s = emptyGame();
+    putUnit(s, 'player', 0, 2, 'grunt', 1);
+    putUnit(s, 'enemy', 0, 3, 'grunt', 1);
+    syncOwners(s);
+    expect(s.lanes[0].map((t) => t.owner)).toEqual(['player', 'player', 'player', 'enemy', 'enemy']);
+    applyAttacks(s, collectAttacks(s, lowRng, false));
+    expect(s.lanes[0].map((t) => t.owner)).toEqual([null, null, null, null, null]);
   });
 });
 
@@ -78,6 +89,19 @@ describe('targeting', () => {
     const t = findTarget(s, 'player', 0, 2, 2, [1]);
     expect(t).toMatchObject({ type: 'unit', col: 3 });
     expect(s.lanes[0][3].units.find((u) => t?.type === 'unit' && u.id === t.id)?.kind).toBe('brute');
+  });
+
+  it('units on a building\'s tile are sheltered until it falls', () => {
+    const s = emptyGame();
+    putBunker(s, 'enemy', 0, 3, 'wall');
+    putUnit(s, 'enemy', 0, 3, 'brute'); // adjacent melee, but inside the wall
+    putUnit(s, 'player', 0, 2, 'grunt');
+    expect(findTarget(s, 'player', 0, 2, 1, [1])).toMatchObject({ type: 'bunker', col: 3 });
+    // Once the wall is doomed this round, extra damage spills onto the units inside.
+    s.lanes[0][3].bunker!.hp = 1;
+    putUnit(s, 'player', 0, 2, 'grunt');
+    const mine = collectAttacks(s, lowRng, false).filter((a) => a.attacker.startsWith('Your'));
+    expect(mine.map((a) => a.target.type)).toEqual(['bunker', 'unit']);
   });
 
   it('back ranks reach past their own column', () => {

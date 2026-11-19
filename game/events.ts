@@ -27,7 +27,7 @@ export function placeFreeUnit(state: GameState, side: Side, kind: UnitKind): boo
   open.sort((a, b) => state.lanes[a.lane][a.col].units.length - state.lanes[b.lane][b.col].units.length);
   const { lane, col } = open[0];
   state.lanes[lane][col].units.push(makeUnit(state, side, kind));
-  state.lanes[lane][col].owner = side;
+  syncOwners(state);
   return true;
 }
 

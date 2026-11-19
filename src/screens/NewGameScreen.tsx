@@ -7,7 +7,7 @@ import { C } from '../theme';
 const RULES = [
   'Three lanes, five tiles each. Your base is on the left.',
   'Each round you roll 2d6 for supply (carries over, max 15).',
-  'Tap a tile to build or train. Units train on your home column or on tiles with your bunker. Empty tiles are neutral.',
+  'Tap a tile to build or train. Units train on your home column or on tiles with your bunker. You hold every tile up to your furthest unit.',
   'End the turn: everything in range attacks (each piece has a damage range, like 2–4), then units advance one tile.',
   'Destroy the AI base (20 HP) to win. If both bases survive 20 rounds, whoever holds more tiles wins.',
 ];

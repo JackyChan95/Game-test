@@ -41,6 +41,7 @@ const UNIT_KINDS: UnitKind[] = ['grunt', 'sniper', 'brute'];
 export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
   const tile = game.lanes[lane][col];
   const owner = tile.owner === 'player' ? 'Held by you' : tile.owner === 'enemy' ? 'Held by AI' : 'Neutral';
+  const shelter = tile.bunker && tile.units.length > 0 ? ' · units sheltered by the building' : '';
   const b = tile.bunker;
 
   const bunkerStats = (k: BunkerKind) => {
@@ -61,7 +62,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Lane {lane + 1} · Tile {col + 1}</Text>
-            <Text style={styles.subtitle}>{owner}</Text>
+            <Text style={styles.subtitle}>{owner}{shelter}</Text>
           </View>
           <Text style={styles.supply}>Supply {game.players.player.supply}</Text>
         </View>

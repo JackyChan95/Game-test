@@ -15,8 +15,10 @@ npm run typecheck
 ## Rules
 
 **Map.** 3 lanes × 5 tiles. Your base is on the left, the AI's on the right, and each base has 20 HP.
-A tile holds at most one bunker and any number of units. A tile belongs to whoever has units or a
-bunker on it; an empty tile is neutral. Every tile starts neutral.
+A tile holds at most one bunker and any number of units. Tile control follows the front line: in each
+lane, every tile from your base up to your furthest unit or bunker is yours, and the same for the AI
+from its side. Tiles between the two fronts are neutral, so when the front units on both sides fall,
+that ground goes back to neutral. Every tile starts neutral.
 
 **Each round:**
 
@@ -26,7 +28,9 @@ bunker on it; an empty tile is neutral. Every tile starts neutral.
 4. **Clash: attack, then move.**
    - *Attacks.* Every unit and Turret picks one enemy in its lane within range, in this order:
      an enemy melee unit in melee range (adjacent), then buildings, then melee units, then ranged
-     units, then the base. Ties go to the nearest. A unit's range is measured from the front of its
+     units, then the base. Ties go to the nearest. Units on the same tile as their own building are
+     sheltered: they can't be hit until the building is destroyed (damage beyond what's needed to destroy
+     it spills onto them that round). A unit's range is measured from the front of its
      own column, so units queued behind friendly units still reach the enemy front. Each attack rolls
      a number inside the attacker's damage range (minimum 1). Attacks never overkill: once enough
      damage is assigned to destroy a target, the remaining attackers pick the next enemy. All attacks
@@ -35,8 +39,8 @@ bunker on it; an empty tile is neutral. Every tile starts neutral.
      range or the next tile holds an enemy unit or bunker. Who moves first alternates each round.
 5. **Win check.**
 
-**Where you can build.** Bunkers go on any tile without a bunker that is either empty and in your
-first two columns, or has your units on it. Units train on your home column (column 1) or on any
+**Where you can build.** Bunkers go on any tile without a bunker that you hold (anywhere behind
+your front line), or on a neutral tile in your first two columns. Units train on your home column (column 1) or on any
 tile with one of your bunkers, as long as no enemy is there. So bunkers act as forward spawn points.
 
 | Bunker | Cost | HP | Attack | Upgrade (once) |
@@ -66,8 +70,8 @@ bases still stand after round 20, the side holding more tiles wins, and base HP 
 bases fall in the same round, the same tiles-then-HP comparison decides.
 
 **Balance notes.** The numbers were tuned with simulated games (500 per matchup). With the AI playing
-both sides, about 89% of games end with a base destroyed, at a median of round 13 (half of games end
-between rounds 11 and 16). Against a player making random moves the AI wins about 60%. A Depot built
+both sides, about 87% of games end with a base destroyed, at a median of round 13 (half of games end
+between rounds 10 and 16). Against a player making random moves the AI wins about 60%. A Depot built
 early improves win rate by about 5%.
 
 **AI.** The AI is rule-based, and can play either side (the tests and balance simulations use this).

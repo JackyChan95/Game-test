@@ -4,6 +4,7 @@
  * Attacks: every unit and armed bunker picks an enemy in its lane within
  * range, by priority: an enemy melee unit in melee range, then buildings, then
  * melee units, then ranged units, then the base (ties go to the nearest).
+ * Units on their own building's tile are sheltered until it falls.
  * A unit's range is measured from the front of its own column, so units
  * queued behind friendly units still reach the enemy front. Damage is rolled within the attacker's range,
  * minimum 1. Attacks never overkill: once enough damage is assigned to destroy
@@ -13,8 +14,8 @@
  *
  * Movement: each unit then advances one tile toward the enemy base unless it
  * has a target in range or the next tile holds an enemy (unit or bunker).
- * There is no limit on units per tile. A tile belongs to whoever has units
- * or a bunker on it; an empty tile is neutral.
+ * There is no limit on units per tile. Tile control follows the front line
+ * (see syncOwners).
  */
 import { BASE_COL, BUNKERS, COLS, DIR, UNITS } from './config';
 import { other, pushLog, syncOwners } from './board';
@@ -44,7 +45,9 @@ export interface Attack {
 /**
  * Target priority, lowest first: an enemy melee unit in melee range, then
  * buildings, then melee units, then ranged units, then the base. Ties go to the
- * nearest. `alive` lets the caller skip targets that are already doomed.
+ * nearest. Units on the same tile as their own building are sheltered: they
+ * can't be targeted until that building has taken enough damage to fall.
+ * `alive` lets the caller skip targets that are already doomed.
  */
 export function findTarget(
   state: GameState, side: Side, lane: number, col: number, range: number, dirs: number[],
@@ -58,11 +61,15 @@ export function findTarget(
       if (c === BASE_COL[foe]) options.push({ t: { type: 'base', side: foe }, rank: 4, dist: d });
       if (c < 0 || c >= COLS) continue;
       const tile = state.lanes[lane][c];
+      let sheltered = false;
       if (tile.bunker && tile.bunker.owner === foe) {
-        options.push({ t: { type: 'bunker', lane, col: c }, rank: 1, dist: d });
+        const t: Target = { type: 'bunker', lane, col: c };
+        options.push({ t, rank: 1, dist: d });
+        // Units on a building's tile can't be hit until the building is (about to be) destroyed.
+        sheltered = alive(t);
       }
       for (const u of tile.units) {
-        if (u.owner !== foe) continue;
+        if (u.owner !== foe || sheltered) continue;
         const melee = UNITS[u.kind].range === 1;
         const rank = melee ? (d === 1 ? 0 : 2) : 3;
         options.push({ t: { type: 'unit', lane, col: c, id: u.id }, rank, dist: d });

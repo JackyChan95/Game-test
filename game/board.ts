@@ -45,9 +45,26 @@ export function presence(tile: Tile): Side | null {
   return null;
 }
 
-/** A tile belongs to whoever has units or a bunker on it; an empty tile is neutral. */
+/**
+ * Tile control follows the front line. In each lane, every tile from a side's
+ * base up to its furthest-forward unit or bunker belongs to that side. Tiles
+ * between the two fronts are neutral, so when the front units on both sides
+ * fall, the ground they stood on goes back to neutral. (Units can't pass
+ * enemies, so the two sides' pieces never interleave in a lane.)
+ */
 export function syncOwners(state: GameState) {
-  for (const lane of state.lanes) for (const tile of lane) tile.owner = presence(tile);
+  for (const lane of state.lanes) {
+    let playerFront = -1;
+    let enemyFront = lane.length;
+    lane.forEach((tile, col) => {
+      const side = presence(tile);
+      if (side === 'player') playerFront = Math.max(playerFront, col);
+      if (side === 'enemy') enemyFront = Math.min(enemyFront, col);
+    });
+    lane.forEach((tile, col) => {
+      tile.owner = col <= playerFront ? 'player' : col >= enemyFront ? 'enemy' : null;
+    });
+  }
 }
 
 export function pushLog(state: GameState, line: string) {

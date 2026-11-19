@@ -21,7 +21,7 @@ export interface Unit {
 }
 
 export interface Tile {
-  /** Who occupies this tile (units or a bunker); null when empty. Kept in sync by syncOwners. */
+  /** Who controls this tile: tiles up to each side's furthest unit or bunker are theirs. Kept in sync by syncOwners. */
   owner: Side | null;
   bunker: Bunker | null;
   units: Unit[];
