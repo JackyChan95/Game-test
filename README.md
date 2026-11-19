@@ -1,5 +1,7 @@
 # Bunker Lanes
 
+> This repo also contains **[Lantern Drift](lantern-drift/)**, a relaxing chain-and-combo game for mobile browsers (a single `index.html`).
+
 A short, turn-based lane strategy game for one player against a simple AI.
 Built with Expo (SDK 58), React Native and TypeScript.
 

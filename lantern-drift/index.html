@@ -1,0 +1,684 @@
+<!doctype html>
+<title>Lantern Drift</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a1624">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600&family=Nunito:wght@400;600;700&display=swap">
+<style>
+  /* Layout: one full-bleed canvas (a pond at dusk) with a thin HUD floating over it. Single dark look by design. */
+  :root {
+    --night: #0a1624;
+    --deep: #10283a;
+    --ink: #e9f1f7;
+    --mist: rgba(233, 241, 247, 0.62);
+    --faint: rgba(233, 241, 247, 0.14);
+    --glow: #ffd47e;
+    --display: "Comfortaa", "Nunito", ui-rounded, system-ui, sans-serif;
+    --body: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--night);
+    color: var(--ink);
+    font-family: var(--body);
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 14px);
+    padding-bottom: 10px;
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
+    pointer-events: none;
+    z-index: 2;
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .label { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mist); }
+  .value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0; transition: opacity 0.6s ease; }
+  .flow.on { opacity: 1; }
+  .flow-text { font-family: var(--display); font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
+  .flow-bar { width: 84px; height: 3px; border-radius: 3px; background: var(--faint); overflow: hidden; }
+  .flow-fill { height: 100%; width: 100%; background: var(--glow); transform-origin: left center; border-radius: 3px; }
+  .right { display: flex; justify-content: flex-end; }
+  .icon-btn {
+    pointer-events: auto;
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 1px solid var(--faint); background: rgba(10, 22, 36, 0.35);
+    color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0;
+  }
+  .icon-btn:focus-visible, .begin:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 3;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    padding-left: max(24px, env(safe-area-inset-left, 0px));
+    padding-right: max(24px, env(safe-area-inset-right, 0px));
+    padding-block: 24px;
+    text-align: center;
+    background: radial-gradient(ellipse at 50% 45%, rgba(10, 22, 36, 0.25), rgba(10, 22, 36, 0.78));
+    transition: opacity 0.8s ease;
+  }
+  .overlay.gone { opacity: 0; pointer-events: none; }
+  .title { font-family: var(--display); font-weight: 600; font-size: clamp(34px, 10vw, 54px); letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+  .title span { color: var(--glow); }
+  .how { max-width: 30ch; margin: 0; color: var(--mist); font-size: 16px; line-height: 1.55; }
+  .how b { color: var(--ink); font-weight: 600; }
+  .begin {
+    font-family: var(--display); font-weight: 600; font-size: 17px; letter-spacing: 0.06em;
+    color: var(--night); background: var(--glow);
+    border: 0; border-radius: 999px; padding: 15px 42px; cursor: pointer;
+    box-shadow: 0 0 36px rgba(255, 212, 126, 0.45);
+  }
+  .best { font-size: 13px; color: var(--mist); letter-spacing: 0.06em; min-height: 1em; margin: 0; }
+  @media (prefers-reduced-motion: reduce) { .overlay, .flow { transition: none; } }
+</style>
+
+<canvas id="pond" aria-label="Lantern Drift play area"></canvas>
+
+<div class="hud" id="hud">
+  <div class="stat">
+    <span class="label">Light</span>
+    <span class="value" id="score">0</span>
+  </div>
+  <div class="flow" id="flow" aria-live="polite">
+    <span class="flow-text" id="flowText">flow ×2</span>
+    <div class="flow-bar"><div class="flow-fill" id="flowFill"></div></div>
+  </div>
+  <div class="right">
+    <button class="icon-btn" id="soundBtn" type="button" aria-label="Mute sound" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" id="soundIcon"></svg>
+    </button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <h1 class="title">Lantern <span>Drift</span></h1>
+  <p class="how">Drag through <b>lanterns of one colour</b> to release them. Longer chains bloom brighter. Keep a gentle rhythm to build <b>flow</b>.</p>
+  <button class="begin" id="begin" type="button">Begin</button>
+  <p class="best" id="best"></p>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- setup ----------
+  const canvas = document.getElementById('pond');
+  const ctx = canvas.getContext('2d');
+  const hud = document.getElementById('hud');
+  const scoreEl = document.getElementById('score');
+  const flowEl = document.getElementById('flow');
+  const flowText = document.getElementById('flowText');
+  const flowFill = document.getElementById('flowFill');
+  const overlay = document.getElementById('overlay');
+  const bestEl = document.getElementById('best');
+  const soundBtn = document.getElementById('soundBtn');
+  const soundIcon = document.getElementById('soundIcon');
+
+  const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const PALETTE = ['#ff8f7a', '#ffd166', '#74e89a', '#6fa2ff', '#d79bff', '#ffffff'];
+  const WILD = 5;
+  const COMBO_WINDOW = 4.2;   // seconds between releases to keep flow going
+  const WORDS = { 4: 'nice', 5: 'lovely', 6: 'serene', 7: 'radiant' };
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('lantern-drift:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('lantern-drift:' + k, JSON.stringify(v)); } catch (e) {} },
+  };
+
+  let W = 0, H = 0, DPR = 1, R = 28, TOP = 80, LINK = 100, TARGET = 24;
+  let orbs = [], chain = [], particles = [], ripples = [], texts = [], tasks = [], sparks = [];
+  let score = 0, shownScore = 0, best = store.get('best', 0);
+  let combo = 0, comboLeft = 0, lastRelease = -99, peakCombo = 0;
+  let started = false, dragging = false, pointerId = null;
+  let px = 0, py = 0, lastPx = 0, lastPy = 0;
+  let time = 0, worldSpeed = 1, warmth = 0;
+  let muted = store.get('muted', false);
+
+  // Each colour gets a pre-rendered glow sprite so drawing stays cheap on phones.
+  const SPRITE = 128, BODY = 0.3; // orb body edge sits at 30% of the sprite radius
+  const sprites = PALETTE.map((hex) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = SPRITE;
+    const g = c.getContext('2d');
+    const h = SPRITE / 2;
+    const grd = g.createRadialGradient(h, h, 0, h, h, h);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.1, rgba(hex, 1));
+    grd.addColorStop(BODY - 0.02, rgba(hex, 0.92));
+    grd.addColorStop(BODY, rgba(hex, 0.38));
+    grd.addColorStop(0.55, rgba(hex, 0.12));
+    grd.addColorStop(1, rgba(hex, 0));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, SPRITE, SPRITE);
+    return c;
+  });
+
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    R = clamp(Math.min(W, H) * 0.06, 20, 36);
+    LINK = R * 3.9;
+    TOP = hud.getBoundingClientRect().bottom + 4;
+    const area = W * (H - TOP);
+    TARGET = clamp(Math.floor(area / (R * R * 15)), 14, 34);
+    sparks = Array.from({ length: reduceMotion ? 18 : 42 }, () => ({
+      x: Math.random() * W, y: Math.random() * H, p: Math.random() * 6.28, s: rand(0.4, 1.4),
+    }));
+    for (const o of orbs) { o.x = clamp(o.x, R, W - R); o.y = clamp(o.y, TOP + R, H - R); }
+  }
+
+  // ---------- orbs ----------
+  function pickColor(x, y) {
+    // Lean toward a neighbour's colour so chains keep forming naturally.
+    if (Math.random() < 0.5) {
+      const near = orbs.filter((o) => o.c !== WILD && Math.hypot(o.x - x, o.y - y) < LINK * 1.6);
+      if (near.length) return near[(Math.random() * near.length) | 0].c;
+    }
+    return (Math.random() * 5) | 0;
+  }
+
+  function spawnOrb(opts = {}) {
+    let x = opts.x, y = opts.y;
+    if (x == null) {
+      let bestPos = null, bestGap = -1;
+      for (let i = 0; i < 24; i++) {
+        const cx = rand(R * 1.2, W - R * 1.2), cy = rand(TOP + R * 1.2, H - R * 1.2);
+        let gap = Infinity;
+        for (const o of orbs) gap = Math.min(gap, Math.hypot(o.x - cx, o.y - cy));
+        if (gap > bestGap) { bestGap = gap; bestPos = [cx, cy]; }
+        if (gap > R * 3) break;
+      }
+      [x, y] = bestPos;
+    }
+    orbs.push({
+      x, y, vx: 0, vy: 0,
+      c: opts.c != null ? opts.c : pickColor(x, y),
+      phase: Math.random() * 1000, born: time, held: false, scale: 0,
+    });
+  }
+
+  function orbAt(x, y, slack) {
+    let hit = null, bd = Infinity;
+    for (const o of orbs) {
+      const d = Math.hypot(o.x - x, o.y - y);
+      if (d < R * slack && d < bd) { bd = d; hit = o; }
+    }
+    return hit;
+  }
+
+  function chainColor() {
+    for (const o of chain) if (o.c !== WILD) return o.c;
+    return null;
+  }
+  function canLink(o) {
+    const col = chainColor();
+    return o.c === WILD || col === null || o.c === col;
+  }
+
+  // ---------- input ----------
+  function localXY(e) { return [e.clientX, e.clientY]; }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!started || dragging) return;
+    const [x, y] = localXY(e);
+    const o = orbAt(x, y, 1.35);
+    if (!o) { ripples.push({ x, y, r: 4, a: 0.25, w: 1 }); return; }
+    dragging = true; pointerId = e.pointerId;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    px = lastPx = x; py = lastPy = y;
+    addToChain(o);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    const [x, y] = localXY(e);
+    // Walk along the finger's path so quick swipes don't skip lanterns.
+    const steps = Math.max(1, Math.ceil(Math.hypot(x - lastPx, y - lastPy) / (R * 0.45)));
+    for (let i = 1; i <= steps; i++) tryAt(lastPx + (x - lastPx) * i / steps, lastPy + (y - lastPy) * i / steps);
+    px = lastPx = x; py = lastPy = y;
+  });
+
+  const endDrag = (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    dragging = false; pointerId = null;
+    if (chain.length >= 2) release();
+    else { for (const o of chain) o.held = false; chain = []; }
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  function tryAt(x, y) {
+    const o = orbAt(x, y, 1.05);
+    if (!o) return;
+    const n = chain.length;
+    if (o === chain[n - 1]) return;
+    if (n >= 2 && o === chain[n - 2]) { // slide back to undo the last link
+      chain.pop().held = false;
+      audio.note(chain.length - 1, 0.5);
+      return;
+    }
+    if (o.held || !canLink(o) || dist(chain[n - 1], o) > LINK) return;
+    addToChain(o);
+  }
+
+  function addToChain(o) {
+    o.held = true;
+    chain.push(o);
+    audio.note(chain.length - 1, 1);
+    ripples.push({ x: o.x, y: o.y, r: R, a: 0.35, w: 1.5, c: PALETTE[o.c] });
+    if (navigator.vibrate) { try { navigator.vibrate(chain.length > 6 ? 14 : 8); } catch (e) {} }
+  }
+
+  // ---------- releasing ----------
+  function release() {
+    const n = chain.length;
+    const col = chainColor() ?? WILD;
+    const last = chain[n - 1];
+    combo = time - lastRelease < COMBO_WINDOW ? combo + 1 : 1;
+    lastRelease = time;
+    comboLeft = COMBO_WINDOW;
+    peakCombo = Math.max(peakCombo, combo);
+    const mult = 1 + (combo - 1) * 0.25;
+    const pts = Math.round(n * n * 10 * mult);
+    addScore(pts);
+
+    const popped = chain.slice();
+    chain = [];
+    popped.forEach((o, i) => later(i * 0.055, () => popOrb(o, 1)));
+    audio.bloom(n, combo);
+
+    const word = n >= 8 ? 'tide bloom' : WORDS[n];
+    texts.push({ x: last.x, y: last.y - R * 1.4, s: '+' + pts, a: 1, vy: -26, size: 18 + Math.min(n, 10), c: PALETTE[col] });
+    if (word) texts.push({ x: last.x, y: last.y - R * 2.5, s: word, a: 1, vy: -18, size: 15, c: '#e9f1f7', font: 'display' });
+
+    // Long chains leave a white spirit lantern behind, which links with any colour.
+    if (n >= 5) later(n * 0.055 + 0.15, () => {
+      spawnOrb({ x: last.x, y: last.y, c: WILD });
+      audio.chime();
+    });
+
+    // Eight or more: every lantern of that colour drifts up and releases too.
+    if (n >= 8 && col !== WILD) {
+      later(n * 0.055 + 0.35, () => {
+        const same = orbs.filter((o) => o.c === col && !o.held);
+        same.forEach((o, i) => later(i * 0.07, () => { popOrb(o, 0.7); addScore(Math.round(15 * mult)); audio.note(i + 3, 0.45); }));
+      });
+    }
+  }
+
+  function popOrb(o, power) {
+    const i = orbs.indexOf(o);
+    if (i < 0) return;
+    orbs.splice(i, 1);
+    const color = PALETTE[o.c];
+    const count = reduceMotion ? 5 : Math.round(12 * power);
+    for (let k = 0; k < count; k++) {
+      const a = Math.random() * Math.PI * 2, sp = rand(30, 120) * power;
+      particles.push({ x: o.x, y: o.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20, life: rand(0.8, 1.6), max: 1.6, s: rand(0.18, 0.4), c: o.c });
+    }
+    ripples.push({ x: o.x, y: o.y, r: R * 0.8, a: 0.5, w: 2, c: color, grow: 70 });
+    later(rand(0.5, 1.4), () => { if (orbs.length < TARGET) spawnOrb(); });
+  }
+
+  function addScore(p) {
+    score += p;
+    if (score > best) { best = score; store.set('best', best); }
+  }
+
+  function later(delay, fn) { tasks.push({ at: time + delay, fn }); }
+
+  // ---------- simulation ----------
+  function update(dt) {
+    // The world slows to a hush while you're drawing a chain.
+    worldSpeed += ((dragging ? 0.22 : 1) - worldSpeed) * Math.min(1, dt * 6);
+    const sdt = dt * worldSpeed * (reduceMotion ? 0.5 : 1);
+    time += dt;
+
+    for (let i = tasks.length - 1; i >= 0; i--) {
+      if (tasks[i].at <= time) { const t = tasks[i]; tasks.splice(i, 1); t.fn(); }
+    }
+
+    for (const o of orbs) {
+      o.scale += ((o.held ? 1.16 : 1) - o.scale) * Math.min(1, dt * 7);
+      if (o.held) { o.vx *= 0.8; o.vy *= 0.8; continue; }
+      // Slow current: a gentle swirling flow field.
+      const fx = Math.sin(time * 0.21 + o.y * 0.006 + o.phase) * 9;
+      const fy = Math.cos(time * 0.17 + o.x * 0.007 + o.phase * 1.3) * 7 - 1.5;
+      o.vx += (fx - o.vx) * sdt * 0.6;
+      o.vy += (fy - o.vy) * sdt * 0.6;
+    }
+    // Soft separation so lanterns never stack.
+    for (let i = 0; i < orbs.length; i++) {
+      const a = orbs[i];
+      for (let j = i + 1; j < orbs.length; j++) {
+        const b = orbs[j];
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
+        const min = R * 2.3;
+        if (d < min) {
+          const push = (min - d) * 2.2, nx = dx / d, ny = dy / d;
+          if (!a.held) { a.vx -= nx * push * sdt * 4; a.vy -= ny * push * sdt * 4; }
+          if (!b.held) { b.vx += nx * push * sdt * 4; b.vy += ny * push * sdt * 4; }
+        }
+      }
+    }
+    for (const o of orbs) {
+      if (o.held) continue;
+      const m = R * 1.1;
+      if (o.x < m) o.vx += (m - o.x) * sdt * 3;
+      if (o.x > W - m) o.vx -= (o.x - (W - m)) * sdt * 3;
+      if (o.y < TOP + m) o.vy += (TOP + m - o.y) * sdt * 3;
+      if (o.y > H - m) o.vy -= (o.y - (H - m)) * sdt * 3;
+      o.x += o.vx * sdt; o.y += o.vy * sdt;
+    }
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      p.vx *= 1 - dt * 1.6; p.vy = p.vy * (1 - dt * 1.6) - 14 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+    }
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i];
+      r.r += (r.grow || 40) * dt; r.a -= dt * 0.6;
+      if (r.a <= 0) ripples.splice(i, 1);
+    }
+    for (let i = texts.length - 1; i >= 0; i--) {
+      const t = texts[i];
+      t.y += t.vy * dt; t.a -= dt * 0.55;
+      if (t.a <= 0) texts.splice(i, 1);
+    }
+
+    if (comboLeft > 0) {
+      comboLeft -= dt;
+      if (comboLeft <= 0) {
+        if (combo >= 3) texts.push({ x: W / 2, y: TOP + 30, s: `flow settled · ×${combo}`, a: 0.9, vy: -6, size: 14, c: '#e9f1f7', font: 'display' });
+        combo = 0;
+      }
+    }
+    warmth += ((combo > 1 ? Math.min(1, (combo - 1) / 8) : 0) - warmth) * Math.min(1, dt * 1.2);
+    shownScore += (score - shownScore) * Math.min(1, dt * 8);
+  }
+
+  // ---------- drawing ----------
+  function mix(a, b, t) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((pa >> s) & 255) + (((pb >> s) & 255) - ((pa >> s) & 255)) * t);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  function draw() {
+    // Water: deep blue that warms toward violet and rose as flow builds.
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, mix('#0a1624', '#1d1533', warmth));
+    bg.addColorStop(0.6, mix('#0f2537', '#2a1d3d', warmth));
+    bg.addColorStop(1, mix('#12324a', '#3d2640', warmth));
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Two slow moonlight pools.
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 2; i++) {
+      const cx = W * (0.3 + 0.4 * i) + Math.sin(time * 0.05 + i * 2) * W * 0.15;
+      const cy = H * (0.35 + 0.3 * i) + Math.cos(time * 0.04 + i) * H * 0.1;
+      const rr = Math.max(W, H) * 0.55;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rr);
+      const tint = i ? mix('#2a6f8f', '#b0607a', warmth) : mix('#3c5f9a', '#d79a5a', warmth);
+      g.addColorStop(0, tint.replace('rgb', 'rgba').replace(')', ',0.16)'));
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Fireflies.
+    for (const s of sparks) {
+      const a = 0.25 + 0.25 * Math.sin(time * s.s + s.p);
+      const x = (s.x + Math.sin(time * 0.1 * s.s + s.p) * 20 + W) % W;
+      const y = (s.y - time * 4 * s.s % H + H) % H;
+      ctx.fillStyle = `rgba(255,236,190,${a * 0.6})`;
+      ctx.beginPath(); ctx.arc(x, y, 1.1 * s.s, 0, 6.283); ctx.fill();
+    }
+
+    for (const r of ripples) {
+      ctx.strokeStyle = r.c ? rgba(r.c, r.a * 0.6) : `rgba(233,241,247,${r.a})`;
+      ctx.lineWidth = r.w;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 6.283); ctx.stroke();
+    }
+
+    // Chain thread.
+    if (chain.length) {
+      const col = PALETTE[chainColor() ?? WILD];
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (const [w, a] of [[R * 0.7, 0.14], [R * 0.32, 0.35], [R * 0.12, 0.95]]) {
+        ctx.strokeStyle = rgba(col, a); ctx.lineWidth = w;
+        ctx.beginPath();
+        ctx.moveTo(chain[0].x, chain[0].y);
+        for (let i = 1; i < chain.length; i++) ctx.lineTo(chain[i].x, chain[i].y);
+        if (dragging) ctx.lineTo(px, py);
+        ctx.stroke();
+      }
+    }
+
+    // Lanterns.
+    ctx.globalCompositeOperation = 'source-over';
+    const last = chain[chain.length - 1];
+    for (const o of orbs) {
+      const born = clamp((time - o.born) / 0.7, 0, 1);
+      const ease = 1 - Math.pow(1 - born, 3);
+      const breathe = 1 + Math.sin(time * 1.3 + o.phase) * 0.04;
+      const size = (R / BODY) * 2 * o.scale * ease * breathe;
+      ctx.globalAlpha = (o.held ? 1 : 0.88) * ease;
+      ctx.drawImage(sprites[o.c], o.x - size / 2, o.y - size / 2, size, size);
+
+      // Hint: lanterns you could link to next pulse with a faint ring.
+      if (last && !o.held && canLink(o) && dist(last, o) <= LINK) {
+        ctx.globalAlpha = 0.35 + 0.25 * Math.sin(time * 5);
+        ctx.strokeStyle = PALETTE[o.c]; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(o.x, o.y, R * 1.25, 0, 6.283); ctx.stroke();
+      }
+      if (o.c === WILD) { // five tiny colour motes circle the spirit lantern
+        ctx.globalAlpha = ease;
+        for (let k = 0; k < 5; k++) {
+          const a = time * 1.2 + k * 1.2566;
+          ctx.fillStyle = PALETTE[k];
+          ctx.beginPath(); ctx.arc(o.x + Math.cos(a) * R * 0.95, o.y + Math.sin(a) * R * 0.95, R * 0.11, 0, 6.283); ctx.fill();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (const p of particles) {
+      const s = R * p.s * 4 * (p.life / p.max + 0.3);
+      ctx.globalAlpha = Math.min(1, p.life / p.max * 1.4);
+      ctx.drawImage(sprites[p.c], p.x - s / 2, p.y - s / 2, s, s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const t of texts) {
+      ctx.globalAlpha = clamp(t.a, 0, 1);
+      ctx.font = `${t.font === 'display' ? '600' : '700'} ${t.size}px ${t.font === 'display' ? 'Comfortaa, Nunito, sans-serif' : 'Nunito, sans-serif'}`;
+      ctx.fillStyle = t.c;
+      ctx.fillText(t.s, t.x, t.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // HUD values.
+    scoreEl.textContent = Math.round(shownScore).toLocaleString();
+    const on = combo >= 2;
+    flowEl.classList.toggle('on', on);
+    if (on) {
+      flowText.textContent = `flow ×${combo}`;
+      flowFill.style.transform = `scaleX(${clamp(comboLeft / COMBO_WINDOW, 0, 1)})`;
+    }
+  }
+
+  let prev = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - prev) / 1000);
+    prev = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- sound ----------
+  // Soft bell-like tones on a major pentatonic scale, with a generated reverb tail.
+  const audio = (() => {
+    let ac = null, out = null, wet = null, pad = null;
+    const SCALE = [0, 2, 4, 7, 9];
+    const BASE = 220 * Math.pow(2, 3 / 12); // C4-ish
+
+    function init() {
+      if (ac) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ac = new AC();
+      out = ac.createGain();
+      out.gain.value = muted ? 0 : 0.8;
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.ratio.value = 3;
+      out.connect(comp).connect(ac.destination);
+
+      const verb = ac.createConvolver();
+      const len = ac.sampleRate * 3.2, ir = ac.createBuffer(2, len, ac.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = ir.getChannelData(c);
+        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+      }
+      verb.buffer = ir;
+      wet = ac.createGain(); wet.gain.value = 0.5;
+      wet.connect(verb).connect(out);
+      startPad();
+    }
+
+    function freq(step) {
+      const oct = Math.floor(step / 5), deg = SCALE[((step % 5) + 5) % 5];
+      return BASE * Math.pow(2, (deg + 12 * oct) / 12);
+    }
+
+    function tone(f, when, vol, decay, type = 'sine') {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(vol, when + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + decay);
+      o.connect(g); g.connect(out); g.connect(wet);
+      o.start(when); o.stop(when + decay + 0.05);
+    }
+
+    function startPad() {
+      pad = ac.createGain(); pad.gain.value = 0.0001;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520;
+      for (const [f, d] of [[65.4, 0], [98.0, 4], [130.8, -3], [196.0, 2]]) {
+        const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = f; o.detune.value = d;
+        const g = ac.createGain(); g.gain.value = 0.05;
+        const lfo = ac.createOscillator(), lg = ac.createGain();
+        lfo.frequency.value = rand(0.05, 0.12); lg.gain.value = 0.04;
+        lfo.connect(lg).connect(g.gain);
+        o.connect(g).connect(lp); o.start(); lfo.start();
+      }
+      lp.connect(pad); pad.connect(out); pad.connect(wet);
+      pad.gain.exponentialRampToValueAtTime(0.5, ac.currentTime + 4);
+    }
+
+    return {
+      init,
+      resume() { if (ac && ac.state === 'suspended') ac.resume(); },
+      suspend() { if (ac && ac.state === 'running') ac.suspend(); },
+      setMuted(m) { if (out) out.gain.setTargetAtTime(m ? 0 : 0.8, ac.currentTime, 0.15); },
+      note(step, vol) {
+        if (!ac) return;
+        const lift = Math.min(combo, 6); // flow lifts the melody a little
+        const f = freq(step + lift);
+        const t = ac.currentTime;
+        tone(f, t, 0.16 * vol, 1.8);
+        tone(f * 2, t, 0.035 * vol, 0.9, 'triangle');
+      },
+      bloom(n, c) {
+        if (!ac) return;
+        const t = ac.currentTime + 0.04;
+        const root = Math.min(c, 6);
+        [0, 2, 4, 7].slice(0, n >= 5 ? 4 : 3).forEach((s, i) => tone(freq(root + s - 5) , t + i * 0.06, 0.07, 3.2));
+      },
+      chime() {
+        if (!ac) return;
+        const t = ac.currentTime;
+        [12, 14, 16].forEach((s, i) => tone(freq(s), t + i * 0.09, 0.05, 2.2));
+      },
+    };
+  })();
+
+  // ---------- controls ----------
+  function drawSoundIcon() {
+    soundIcon.innerHTML = muted
+      ? '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m22 9-6 6M16 9l6 6"/>'
+      : '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>';
+    soundBtn.setAttribute('aria-label', muted ? 'Turn sound on' : 'Mute sound');
+    soundBtn.setAttribute('aria-pressed', String(muted));
+  }
+  soundBtn.addEventListener('click', () => {
+    muted = !muted; store.set('muted', muted);
+    audio.init(); audio.resume(); audio.setMuted(muted);
+    drawSoundIcon();
+  });
+
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+
+  document.getElementById('begin').addEventListener('click', () => {
+    audio.init(); audio.resume();
+    started = true;
+    overlay.classList.add('gone');
+    keepAwake();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) audio.suspend();
+    else { audio.resume(); prev = performance.now(); if (started) keepAwake(); }
+  });
+
+  window.addEventListener('resize', resize);
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+  // ---------- boot ----------
+  resize();
+  for (let i = 0; i < TARGET; i++) spawnOrb();
+  for (const o of orbs) o.born = -1; // the opening pond is already lit
+  if (best > 0) bestEl.textContent = `Your brightest pond: ${best.toLocaleString()}`;
+  drawSoundIcon();
+  requestAnimationFrame(frame);
+  if (/[?&]debug\b/.test(location.search)) window.__ld = { get orbs() { return orbs; }, get score() { return score; }, get combo() { return combo; }, LINK: () => LINK };
+})();
+</script>
