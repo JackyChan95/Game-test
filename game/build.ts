@@ -2,7 +2,7 @@
  * Build-phase rules: validation and (mutating) application of build actions.
  * Callers should pass a cloned state; the engine does this for you.
  */
-import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNITS } from './config';
+import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNIT_UPGRADES, UNITS } from './config';
 import { inBounds, other, pushLog, SIDE, syncOwners } from './board';
 import type { BunkerKind, GameState, Side, Unit, UnitKind } from './types';
 
@@ -70,8 +70,45 @@ export function upgradeBunker(state: GameState, side: Side, lane: number, col: n
   pushLog(state, `${SIDE[side]} upgraded a ${stats.name} (L${lane + 1}).`);
 }
 
+/** A side's effective stats for a unit type, including its researched upgrade. */
+export function unitStats(state: GameState, side: Side, kind: UnitKind) {
+  const base = UNITS[kind];
+  const up = state.players[side].upgrades[kind] ? UNIT_UPGRADES[kind] : null;
+  return {
+    hp: base.hp + (up?.hp ?? 0),
+    damage: [base.damage[0] + (up?.damage ?? 0), base.damage[1] + (up?.damage ?? 0)] as [number, number],
+    range: base.range + (up?.range ?? 0),
+    armor: base.armor + (up?.armor ?? 0),
+  };
+}
+
+export function canUpgradeUnit(state: GameState, side: Side, kind: UnitKind): string | null {
+  if (state.phase !== 'build') return 'Not in build phase';
+  if (state.players[side].upgrades[kind]) return 'Researched';
+  if (state.players[side].supply < UNIT_UPGRADES[kind].cost) return 'Not enough supply';
+  return null;
+}
+
+/** Research a unit upgrade. Existing units of that type gain the extra HP too. */
+export function upgradeUnit(state: GameState, side: Side, kind: UnitKind) {
+  const up = UNIT_UPGRADES[kind];
+  state.players[side].supply -= up.cost;
+  state.players[side].upgrades[kind] = true;
+  for (const lane of state.lanes) {
+    for (const tile of lane) {
+      for (const u of tile.units) {
+        if (u.owner === side && u.kind === kind) {
+          u.maxHp += up.hp;
+          u.hp += up.hp;
+        }
+      }
+    }
+  }
+  pushLog(state, `${SIDE[side]} researched ${up.name} (${UNITS[kind].name}s: ${up.blurb}).`);
+}
+
 export function makeUnit(state: GameState, side: Side, kind: UnitKind): Unit {
-  const hp = UNITS[kind].hp;
+  const hp = unitStats(state, side, kind).hp;
   return { id: state.nextId++, kind, owner: side, hp, maxHp: hp };
 }
 

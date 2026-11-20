@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  BUNKERS, UNITS, validateAction,
+  BUNKERS, UNIT_UPGRADES, UNITS, unitStats, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
@@ -49,9 +49,12 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
     const atk = s.damage === null ? 'no attack' : `${s.damage[0]}–${s.damage[1]} dmg, range ${s.range}`;
     return `${s.hp} HP · ${atk} · ${s.blurb}`;
   };
-  const unitStats = (k: UnitKind) => {
-    const s = UNITS[k];
-    return `${s.hp} HP · ${s.damage[0]}–${s.damage[1]} dmg, range ${s.range} · ${s.blurb}`;
+  const unitDetail = (k: UnitKind) => {
+    const s = unitStats(game, 'player', k);
+    const armor = s.armor ? ` · armor ${s.armor}` : '';
+    const pierce = UNITS[k].pierce ? ' · ignores armor' : '';
+    const up = game.players.player.upgrades[k] ? ' · upgraded' : '';
+    return `${s.hp} HP · ${s.damage[0]}–${s.damage[1]} dmg, range ${s.range}${armor}${pierce}${up}`;
   };
 
   return (
@@ -67,6 +70,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
           <Text style={styles.supply}>Supply {game.players.player.supply}</Text>
         </View>
 
+        <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {(b || tile.units.length > 0) && (
           <View style={styles.contents}>
             {b && (
@@ -113,11 +117,24 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
         {UNIT_KINDS.map((k) => {
           const a: Action = { type: 'trainUnit', lane, col, kind: k };
           return (
-            <Option key={k} title={UNITS[k].name} detail={unitStats(k)} cost={UNITS[k].cost}
+            <Option key={k} title={UNITS[k].name} detail={unitDetail(k)} cost={UNITS[k].cost}
               icon={<UnitIcon kind={k} color={C.player} detail={C.bg} size={22} />}
               reason={validateAction(game, a)} onPress={() => onAction(a)} />
           );
         })}
+
+        <Text style={styles.section}>UNIT UPGRADES</Text>
+        <Text style={styles.note}>Research once. Applies to all your units of that type, including those already fielded.</Text>
+        {UNIT_KINDS.map((k) => {
+          const a: Action = { type: 'upgradeUnit', kind: k };
+          const u = UNIT_UPGRADES[k];
+          return (
+            <Option key={k} title={u.name} detail={`${UNITS[k].name}s: ${u.blurb}`} cost={u.cost}
+              icon={<UnitIcon kind={k} color={C.player} detail={C.bg} size={22} />}
+              reason={validateAction(game, a)} onPress={() => onAction(a)} />
+          );
+        })}
+        </ScrollView>
 
         <Pressable style={styles.done} onPress={onClose}>
           <Text style={styles.doneText}>Done</Text>
@@ -130,6 +147,7 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
 const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: 'rgba(30,34,31,0.25)' },
   sheet: {
+    maxHeight: '88%',
     backgroundColor: C.surface,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
@@ -164,6 +182,7 @@ const styles = StyleSheet.create({
   optionDetail: { fontSize: 11, color: C.muted, marginTop: 1 },
   cost: { fontSize: 16, fontWeight: '700', color: C.ink, marginLeft: 12, fontVariant: ['tabular-nums'] },
   dim: { color: C.faint },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   done: { marginTop: 8, alignItems: 'center', paddingVertical: 10 },
   doneText: { fontSize: 14, fontWeight: '600', color: C.accent },
 });

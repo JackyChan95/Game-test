@@ -8,10 +8,11 @@
  * upgrade. It repeats until it can't afford anything, so it spends most of its
  * supply.
  */
-import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNITS } from './config';
+import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNIT_UPGRADES, UNITS } from './config';
 import { other } from './board';
 import {
-  buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, trainUnit, upgradeBunker,
+  buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
+  upgradeUnit,
 } from './build';
 import type { BunkerKind, GameState, Side, UnitKind } from './types';
 import type { Rng } from './rng';
@@ -114,8 +115,14 @@ function hasDefense(state: GameState, me: Side, lane: number): boolean {
 function chooseUnit(state: GameState, me: Side, rng: Rng): UnitKind {
   const supply = state.players[me].supply;
   const r = rng.next();
-  if (supply >= UNITS.brute.cost && r < 0.45) return 'brute';
-  if (supply >= UNITS.sniper.cost && r < 0.7) return 'sniper';
+  // Lean on a researched unit type half the time.
+  const upgraded = (['brute', 'sniper', 'grunt'] as UnitKind[]).filter(
+    (k) => state.players[me].upgrades[k] && supply >= UNITS[k].cost,
+  );
+  if (upgraded.length && r < 0.5) return upgraded[Math.floor(r * 2 * upgraded.length)];
+  const r2 = rng.next();
+  if (supply >= UNITS.brute.cost && r2 < 0.45) return 'brute';
+  if (supply >= UNITS.sniper.cost && r2 < 0.7) return 'sniper';
   return 'grunt';
 }
 
@@ -142,13 +149,26 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
     if (tryBunker(state, me, lane, kind)) return true;
   }
 
-  // 4. Train a unit, focus lane first.
+  // 4. Research the upgrade for the unit type we field most, once we have a few
+  //    and can still afford a unit afterwards.
+  if (state.round >= 4) {
+    const counts = { grunt: 0, sniper: 0, brute: 0 } as Record<UnitKind, number>;
+    for (const l of state.lanes) for (const t of l) for (const u of t.units) if (u.owner === me) counts[u.kind]++;
+    const top = (Object.keys(counts) as UnitKind[]).sort((a, b) => counts[b] - counts[a])[0];
+    const spare = state.players[me].supply - UNIT_UPGRADES[top].cost >= UNITS.grunt.cost;
+    if (counts[top] >= 4 && spare && !canUpgradeUnit(state, me, top)) {
+      upgradeUnit(state, me, top);
+      return true;
+    }
+  }
+
+  // 5. Train a unit, focus lane first.
   const kind = chooseUnit(state, me, rng);
   for (const l of lanesByNeed) {
     if (tryUnit(state, me, l, kind) || tryUnit(state, me, l, 'grunt')) return true;
   }
 
-  // 5. Upgrade something, focus lane first.
+  // 6. Upgrade a bunker, focus lane first.
   for (const l of lanesByNeed) {
     for (let col = 0; col < COLS; col++) {
       if (!canUpgradeBunker(state, me, l, col)) {
@@ -158,7 +178,7 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
     }
   }
 
-  // 6. Nothing else: any bunker anywhere.
+  // 7. Nothing else: any bunker anywhere.
   for (const l of lanesByNeed) {
     if (tryBunker(state, me, l, 'turret') || tryBunker(state, me, l, 'wall')) return true;
   }

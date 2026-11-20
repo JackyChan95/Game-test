@@ -49,13 +49,36 @@ export interface UnitStats {
   /** Damage range [min, max] per attack. */
   damage: [number, number];
   range: number;
+  /** Subtracted from every hit this unit takes (minimum 1 damage). */
+  armor: number;
+  /** Attacks ignore the target's armor. */
+  pierce: boolean;
   blurb: string;
 }
 
 export const UNITS: Record<UnitKind, UnitStats> = {
-  grunt: { name: 'Grunt', cost: 3, hp: 6, damage: [2, 4], range: 1, blurb: 'Cheap melee.' },
-  sniper: { name: 'Sniper', cost: 4, hp: 4, damage: [3, 4], range: 2, blurb: 'Ranged, fragile.' },
-  brute: { name: 'Brute', cost: 7, hp: 12, damage: [4, 6], range: 1, blurb: 'Heavy hitter.' },
+  grunt: { name: 'Grunt', cost: 3, hp: 6, damage: [2, 4], range: 1, armor: 0, pierce: false, blurb: 'Cheap melee.' },
+  sniper: { name: 'Sniper', cost: 4, hp: 4, damage: [4, 5], range: 2, armor: 0, pierce: true, blurb: 'Ranged, fragile; shots ignore armor.' },
+  brute: { name: 'Brute', cost: 7, hp: 15, damage: [5, 6], range: 1, armor: 1, pierce: false, blurb: 'Armored: every hit it takes is 1 lower.' },
+};
+
+export interface UnitUpgrade {
+  name: string;
+  cost: number;
+  /** Added to max HP (existing units are healed by the same amount when researched). */
+  hp: number;
+  /** Added to both ends of the damage range. */
+  damage: number;
+  range: number;
+  armor: number;
+  blurb: string;
+}
+
+/** One-time research per unit type; applies to all of that side's units of the type. */
+export const UNIT_UPGRADES: Record<UnitKind, UnitUpgrade> = {
+  grunt: { name: 'Drill Training', cost: 3, hp: 3, damage: 1, range: 0, armor: 0, blurb: '+3 HP, +1 damage' },
+  sniper: { name: 'Long Scopes', cost: 3, hp: 0, damage: 0, range: 1, armor: 0, blurb: '+1 range (3 tiles)' },
+  brute: { name: 'Heavy Plating', cost: 4, hp: 0, damage: 0, range: 0, armor: 1, blurb: '+1 armor' },
 };
 
 export const EVENTS: Record<EventKind, { name: string; text: string }> = {

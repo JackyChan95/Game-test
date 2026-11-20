@@ -5,7 +5,8 @@
 import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
 import { clone, countTiles, pushLog } from './board';
 import {
-  buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, trainUnit, upgradeBunker,
+  buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
+  upgradeUnit,
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
@@ -36,8 +37,8 @@ export function createGame(seed: string): GameState {
     phase: 'build',
     lanes,
     players: {
-      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP },
-      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP },
+      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: { grunt: false, sniper: false, brute: false } },
+      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: { grunt: false, sniper: false, brute: false } },
     },
     event: 'calm',
     rolls: [],
@@ -84,6 +85,8 @@ export function validateAction(state: GameState, action: Action): string | null 
       return canUpgradeBunker(state, 'player', action.lane, action.col);
     case 'trainUnit':
       return canTrainUnit(state, 'player', action.lane, action.col, action.kind);
+    case 'upgradeUnit':
+      return canUpgradeUnit(state, 'player', action.kind);
     case 'endTurn':
       return null;
   }
@@ -134,6 +137,9 @@ export function gameReducer(state: GameState, action: Action): GameState {
       break;
     case 'upgradeBunker':
       upgradeBunker(next, 'player', action.lane, action.col);
+      break;
+    case 'upgradeUnit':
+      upgradeUnit(next, 'player', action.kind);
       break;
     case 'trainUnit':
       trainUnit(next, 'player', action.lane, action.col, action.kind);

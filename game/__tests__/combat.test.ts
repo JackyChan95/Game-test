@@ -1,6 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { applyAttacks, collectAttacks, findTarget, moveUnits, resolveClash } from '../combat';
 import { createRng } from '../rng';
+import { UNITS } from '../config';
 import { syncOwners } from '../board';
 import { emptyGame, highRng, lowRng, putBunker, putUnit } from './helpers';
 
@@ -135,13 +136,12 @@ describe('targeting', () => {
 describe('attacks', () => {
   it('damage is rolled within the attacker\'s range', () => {
     const s = emptyGame();
-    putUnit(s, 'player', 0, 2, 'brute'); // 4–6
-    putUnit(s, 'enemy', 0, 3, 'grunt'); // 2–4
+    putUnit(s, 'player', 0, 2, 'grunt');
+    putUnit(s, 'enemy', 0, 3, 'grunt');
     const low = collectAttacks(s, lowRng, false);
     const high = collectAttacks(s, highRng, false);
-    const dmg = (as: typeof low, name: string) => as.find((a) => a.attacker.includes(name))!.damage;
-    expect([dmg(low, 'Brute'), dmg(high, 'Brute')]).toEqual([4, 6]);
-    expect([dmg(low, 'Grunt'), dmg(high, 'Grunt')]).toEqual([2, 4]);
+    expect(low.map((a) => a.damage)).toEqual([UNITS.grunt.damage[0], UNITS.grunt.damage[0]]);
+    expect(high.map((a) => a.damage)).toEqual([UNITS.grunt.damage[1], UNITS.grunt.damage[1]]);
   });
 
   it('real rolls stay inside the range', () => {
@@ -159,15 +159,15 @@ describe('attacks', () => {
 
   it('blizzard gives ranged attacks -1 but not melee', () => {
     const s = emptyGame();
-    putUnit(s, 'player', 0, 1, 'sniper'); // ranged 3–4
-    putUnit(s, 'enemy', 0, 2, 'grunt'); // melee 2–4, adjacent to the sniper
+    putUnit(s, 'player', 0, 1, 'sniper'); // ranged
+    putUnit(s, 'enemy', 0, 2, 'grunt'); // melee, adjacent to the sniper
     putBunker(s, 'enemy', 1, 3, 'turret'); // ranged 2–3
-    putUnit(s, 'player', 1, 1, 'brute');
+    putUnit(s, 'player', 1, 1, 'grunt');
     const attacks = collectAttacks(s, lowRng, true);
     const find = (n: string) => attacks.find((a) => a.attacker.includes(n))!;
-    expect(find('Sniper').damage).toBe(2); // 3 - 1
+    expect(find('Your Sniper').damage).toBe(UNITS.sniper.damage[0] - 1);
     expect(find('Turret').damage).toBe(1); // 2 - 1
-    expect(find('Grunt').damage).toBe(2); // melee: no penalty
+    expect(find('AI Grunt').damage).toBe(UNITS.grunt.damage[0]); // melee: no penalty
   });
 
   it('damage is at least 1', () => {

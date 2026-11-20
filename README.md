@@ -49,11 +49,24 @@ tile with one of your bunkers, as long as no enemy is there. So bunkers act as f
 | Turret | 4 | 10 | 2–3, range 2 (both directions) | 3 supply: +4 HP, damage 3–4 |
 | Depot  | 4 | 5  | none, gives +1 supply/round | 3 supply: +3 HP, +1 supply/round |
 
-| Unit | Cost | HP | Damage | Range |
-|---|---|---|---|---|
-| Grunt  | 3 | 6  | 2–4 | melee (1) |
-| Sniper | 4 | 4  | 3–4 | 2 |
-| Brute  | 7 | 12 | 4–6 | melee (1) |
+| Unit | Cost | HP | Damage | Range | Special |
+|---|---|---|---|---|---|
+| Grunt  | 3 | 6  | 2–4 | melee (1) | — |
+| Sniper | 4 | 4  | 4–5 | 2 | Shots ignore armor |
+| Brute  | 7 | 15 | 5–6 | melee (1) | Armor 1: every hit it takes is 1 lower (minimum 1) |
+
+The units form a rough rock-paper-scissors at equal supply (from simulated fights): Brutes beat
+Grunts (armor shrugs off small hits), a Grunt+Sniper mix beats Brutes (Snipers pierce armor from
+behind the front), and a pure Grunt swarm beats a Grunt+Sniper mix.
+
+**Unit upgrades.** Each unit type has one upgrade, researched once from any tile's menu. It applies to
+all your units of that type, including those already on the board. Upgraded units show a small ring.
+
+| Upgrade | Cost | Effect |
+|---|---|---|
+| Drill Training (Grunt) | 3 | +3 HP, damage 3–5 |
+| Long Scopes (Sniper) | 3 | Range 3 |
+| Heavy Plating (Brute) | 4 | +1 armor (armor 2) |
 
 The Depot has no attack, so its upgrade adds income where other bunkers gain damage.
 
@@ -70,15 +83,17 @@ bases still stand after round 20, the side holding more tiles wins, and base HP 
 bases fall in the same round, the same tiles-then-HP comparison decides.
 
 **Balance notes.** The numbers were tuned with simulated games (500 per matchup). With the AI playing
-both sides, about 87% of games end with a base destroyed, at a median of round 13 (half of games end
-between rounds 10 and 16). Against a player making random moves the AI wins about 60%. A Depot built
-early improves win rate by about 5%.
+both sides, about 95% of games end with a base destroyed, at a median of round 12 (half of games end
+between rounds 9 and 14). Against a player making random moves the AI wins about 58%. An early Depot
+improves win rate by about 5%; unit upgrades are worth roughly what they cost and pay off most when
+you commit to one unit type.
 
 **AI.** The AI is rule-based, and can play either side (the tests and balance simulations use this).
 Each step it picks a focus lane, which is the lane where the player's
 force (weighted toward pieces close to the AI base) most outweighs its own, and where the player holds tiles. In order, it then tries to:
 build one early Depot, defend a lane the player is pushing, keep about one bunker per three units,
-train units, and upgrade bunkers. It repeats until it can't afford anything, so it spends nearly
+research the upgrade for the unit type it fields most (from round 4, if it can still afford a unit),
+train units (leaning on upgraded types), and upgrade bunkers. It repeats until it can't afford anything, so it spends nearly
 all its supply each turn.
 
 **Replays.** All randomness, including the AI's, comes from a seeded RNG stored in the game state. The same seed plus

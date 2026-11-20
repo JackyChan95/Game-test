@@ -30,6 +30,8 @@ export interface Tile {
 export interface PlayerState {
   supply: number;
   baseHp: number;
+  /** Unit types this side has researched the upgrade for. */
+  upgrades: Record<UnitKind, boolean>;
 }
 
 export interface DiceRoll {
@@ -91,4 +93,5 @@ export type Action =
   | { type: 'buildBunker'; lane: number; col: number; kind: BunkerKind }
   | { type: 'upgradeBunker'; lane: number; col: number }
   | { type: 'trainUnit'; lane: number; col: number; kind: UnitKind }
+  | { type: 'upgradeUnit'; kind: UnitKind }
   | { type: 'endTurn' };

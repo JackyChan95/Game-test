@@ -82,7 +82,7 @@ export function GameScreen({ game, dispatch, onQuit, onGameOver }: Props) {
             </View>
           ))}
         </View>
-        <Text style={styles.legendText}>Dashed tiles: you can train units there.</Text>
+        <Text style={styles.legendText}>Dashed tiles: you can train units there. Ring on a unit: upgraded.</Text>
       </View>
       <CombatLog lines={game.log} />
       {confirmQuit ? (

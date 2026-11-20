@@ -19,6 +19,7 @@
  */
 import { BASE_COL, BUNKERS, COLS, DIR, UNITS } from './config';
 import { other, pushLog, syncOwners } from './board';
+import { unitStats } from './build';
 import type { GameState, Side } from './types';
 import type { Rng } from './rng';
 
@@ -105,7 +106,7 @@ export function moveUnits(state: GameState, first: Side) {
         const tile = state.lanes[lane][col];
         for (const unit of [...tile.units]) {
           if (unit.owner !== side) continue;
-          if (findTarget(state, side, lane, col, UNITS[unit.kind].range, [dir])) continue;
+          if (findTarget(state, side, lane, col, unitStats(state, side, unit.kind).range, [dir])) continue;
           const next = col + dir;
           if (next < 0 || next >= COLS) continue;
           const dest = state.lanes[lane][next];
@@ -138,9 +139,13 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
   const alive = (t: Target) => hpOf(t) - (pending.get(key(t)) ?? 0) > 0;
 
   const add = (
-    attacker: string, target: Target, [min, max]: [number, number], ranged: boolean,
+    attacker: string, target: Target, [min, max]: [number, number], ranged: boolean, pierce = false,
   ) => {
-    const modifier = blizzard && ranged ? -1 : 0;
+    let modifier = blizzard && ranged ? -1 : 0;
+    if (target.type === 'unit' && !pierce) {
+      const u = state.lanes[target.lane][target.col].units.find((x) => x.id === target.id);
+      if (u) modifier -= unitStats(state, u.owner, u.kind).armor;
+    }
     const damage = Math.max(1, rng.int(min, max) + modifier);
     attacks.push({ attacker, target, min, max, modifier, damage });
     pending.set(key(target), (pending.get(key(target)) ?? 0) + damage);
@@ -158,10 +163,10 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
         }
       }
       for (const u of tile.units) {
-        const s = UNITS[u.kind];
+        const s = unitStats(state, u.owner, u.kind);
         const from = reachFrom(state, u.owner, l, c);
         const target = findTarget(state, u.owner, l, from, s.range, [DIR[u.owner]], alive);
-        if (target) add(`${NAME(u.owner, s.name)} (L${l + 1})`, target, s.damage, s.range >= 2);
+        if (target) add(`${NAME(u.owner, UNITS[u.kind].name)} (L${l + 1})`, target, s.damage, s.range >= 2, UNITS[u.kind].pierce);
       }
     }),
   );
@@ -186,7 +191,7 @@ export function applyAttacks(state: GameState, attacks: Attack[]) {
 export function applyDamage(state: GameState, attacks: Attack[]) {
   for (const a of attacks) {
     const t = a.target;
-    const penalty = a.modifier ? `, ${a.modifier} blizzard` : '';
+    const penalty = a.modifier ? `, ${a.modifier}` : '';
     pushLog(state, `${a.attacker} → ${describe(state, t)}: ${a.damage} (${a.min}–${a.max}${penalty})`);
     if (t.type === 'base') state.players[t.side].baseHp -= a.damage;
     else if (t.type === 'bunker') {

@@ -101,7 +101,9 @@ function BunkerChip({ b }: { b: Bunker }) {
  * Every unit in a stack sits at the same spot; the stack's leader is drawn on
  * top with the stack's count and combined HP.
  */
-function UnitSprite({ u, x, y, stack }: { u: Unit; x: number; y: number; stack: Stack | null }) {
+function UnitSprite({
+  u, x, y, stack, upgraded,
+}: { u: Unit; x: number; y: number; stack: Stack | null; upgraded: boolean }) {
   const pos = useRef(new Animated.ValueXY({ x, y })).current;
   useEffect(() => {
     Animated.timing(pos, {
@@ -129,6 +131,7 @@ function UnitSprite({ u, x, y, stack }: { u: Unit; x: number; y: number; stack: 
             <UnitIcon kind={u.kind} color={C.accentInk} detail={color} facing={u.owner} size={15} />
           </View>
           {leader ? <HpBar hp={hp} max={max} color={color} width={CHIP} /> : <View style={styles.hpSpacer} />}
+          {leader && upgraded && <View style={[styles.upPip, { borderColor: color }]} />}
           {count > 1 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{count}</Text>
@@ -249,7 +252,14 @@ export function Board({ lanes, players, hits, hitKey, isSpawn, selected, onSelec
           ))}
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {sprites.map((s) => (
-              <UnitSprite key={s.u.id} u={s.u} x={s.x} y={s.y} stack={s.stack} />
+              <UnitSprite
+                key={s.u.id}
+                u={s.u}
+                x={s.x}
+                y={s.y}
+                stack={s.stack}
+                upgraded={players[s.u.owner].upgrades[s.u.kind]}
+              />
             ))}
             {floats}
           </View>
@@ -317,6 +327,17 @@ const styles = StyleSheet.create({
   },
   destroyed: { opacity: 0.3 },
   hpSpacer: { height: 3 },
+  // Marks a unit type whose upgrade has been researched.
+  upPip: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    backgroundColor: C.surface,
+  },
   badge: {
     position: 'absolute',
     top: -4,
