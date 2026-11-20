@@ -118,3 +118,12 @@ def test_quarterly_target_uses_complete_quarters():
     g = pd.Series(np.linspace(100, 110, 11), idx)
     q = quarterly_target(g)
     assert [str(p) for p in q.index] == ["2020Q2", "2020Q3"]
+
+
+def test_health_scores_and_tiers():
+    from macro.models.health import score_series, tier
+    idx = pd.date_range("2001-01-01", periods=100, freq="MS")
+    up = pd.Series(np.arange(100.0), idx)
+    assert score_series(up, +1)[0] > 99            # latest is the best on record
+    assert score_series(up, -1)[0] < 1             # ... or the worst if lower is better
+    assert [tier(s) for s in (80, 50, 25, 5)] == ["STRONG", "OK", "WEAK", "CRITICAL"]

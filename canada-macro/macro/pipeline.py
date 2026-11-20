@@ -8,7 +8,7 @@ from .data.build import build_panel
 from .data.registry import BVAR_VARS, SERIES
 from .data.sources import load_all
 from .models import backtest as bt
-from .models import chowlin, housing, nowcast
+from .models import chowlin, health, housing, nowcast
 from .models.bvar import MinnesotaBVAR, select_lags_bic
 from .models.stationarity import stationarity_report
 
@@ -100,7 +100,9 @@ def run(refresh: bool, horizon: int, do_backtest: bool = True, log=print,
     cur = nc["nowcasts"].get(nc["current_quarter"], {})
     log(f"  {nc['current_quarter']} BC GDP nowcast: {cur.get('mean', float('nan')):.2f}% q/q")
 
-    results = {"gdp_bc_annual": raw["gdp_bc_annual"].dropna(), "meta": meta, "flags": flags, "levels": levels, "info": info, "bvar": bvar,
+    results_health = health.compute(levels)
+    log(f"  Economy HP: {results_health['hp']:.0f}/100 ({results_health['tier']})")
+    results = {"health": results_health, "gdp_bc_annual": raw["gdp_bc_annual"].dropna(), "meta": meta, "flags": flags, "levels": levels, "info": info, "bvar": bvar,
                "housing": hous, "nowcast": nc, "today": today, "horizon": horizon}
 
     if do_backtest:

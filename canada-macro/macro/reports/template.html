@@ -31,7 +31,13 @@
 <main>
 <h1>British Columbia &amp; Vancouver macro-econometric model</h1>
 <p class="sub">Run date {{ today }} · Statistics Canada WDS and Bank of Canada Valet (live public data) · Forecast horizon {{ horizon }} months</p>
-<nav><a href="#findings">Findings</a><a href="#data">Data</a><a href="#stationarity">Stationarity</a><a href="#bvar">BVAR</a><a href="#housing">Housing ECM</a><a href="#nowcast">Nowcast</a><a href="#validation">Validation</a><a href="#caveats">Caveats</a></nav>
+<nav><a href="#health">Health</a><a href="#findings">Findings</a><a href="#data">Data</a><a href="#stationarity">Stationarity</a><a href="#bvar">BVAR</a><a href="#housing">Housing ECM</a><a href="#nowcast">Nowcast</a><a href="#validation">Validation</a><a href="#caveats">Caveats</a></nav>
+
+<h2 id="health">Economy health (game-style stat card)</h2>
+<img alt="Game-style health card: HP bar, radar of stats and stat bars" src="data:image/png;base64,{{ health_png }}">
+<details><summary>How the stats are scored</summary>
+<p>Each stat ranks the latest reading against every month since {{ health.start[:4] }}, oriented so 100 is the best month on record and 0 the worst. Tiers: STRONG ≥ 70, OK 40–69, WEAK 20–39, CRITICAL &lt; 20. HP is the plain average. Rankings are relative to BC's own recent history, not a welfare measure. "Housing" uses the new-home price index, so it does not reflect resale prices or rents.</p>
+<div class="scroll">{{ health_table|safe }}</div></details>
 
 <h2 id="findings">Key findings</h2>
 <ul class="findings">{% for f in findings %}<li>{{ f }}</li>{% endfor %}</ul>

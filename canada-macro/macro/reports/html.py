@@ -141,6 +141,8 @@ def render(r: dict, out_path: Path) -> Path:
     ctx = {
         "today": f"{r['today']:%Y-%m-%d}", "horizon": r["horizon"],
         "findings": _findings(r),
+        "health": r["health"], "health_png": charts.health_card(r["health"], r["today"]),
+        "health_table": _tbl(r["health"]["table"].rename(columns=str.capitalize), "{:,.3f}"),
         "series_table": _series_table(r),
         "chow_lin": r["info"]["chow_lin"], "splice": r["info"]["policy_splice"],
         "stationarity_table": _tbl(b["stationarity"], "{:.3f}"),
@@ -176,4 +178,7 @@ def render(r: dict, out_path: Path) -> Path:
     html = env.get_template("template.html").render(**ctx)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+    # The game-style health card is also saved on its own for sharing.
+    import base64
+    (out_path.parent / "health.png").write_bytes(base64.b64decode(ctx["health_png"]))
     return out_path

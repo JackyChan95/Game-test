@@ -40,7 +40,7 @@ IRF_LABELS = {
 
 def to_base64(fig) -> str:
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
     return base64.b64encode(buf.getvalue()).decode()
 
@@ -191,3 +191,65 @@ def chowlin_chart(levels: pd.DataFrame, annual: pd.Series) -> str:
     ax.legend(loc="upper left")
     fig.tight_layout()
     return to_base64(fig)
+
+
+# ----------------------------------------------------------------------------- game-style health card
+TIER_COLORS = {"STRONG": "#0ca30c", "OK": "#fab219", "WEAK": "#ec835a", "CRITICAL": "#d03b3b"}
+TIER_ICONS = {"STRONG": "▲", "OK": "●", "WEAK": "▼", "CRITICAL": "✖"}
+
+
+def health_card(h: dict, today) -> str:
+    """Dark 'character sheet': HP bar, radar of stats, and stat bars with tier labels."""
+    bg, panel, ink, ink2, blue = "#1a1a19", "#242423", "#f0efec", "#c3c2b7", "#3987e5"
+    t = h["table"]
+    with plt.rc_context({"font.family": "DejaVu Sans Mono", "axes.grid": False}):
+        fig = plt.figure(figsize=(12, 6.4), facecolor=bg)
+        fig.text(0.03, 0.93, "BRITISH COLUMBIA ECONOMY", color=ink, fontsize=17, weight="bold")
+        fig.text(0.03, 0.885, f"STATUS CHECK · {today:%Y-%m-%d} · scores = rank vs own history "
+                 f"since {h['start'][:4]} (100 = best month)", color=ink2, fontsize=8.5)
+
+        # HP bar
+        ax = fig.add_axes([0.03, 0.78, 0.94, 0.06], facecolor=panel)
+        col = TIER_COLORS[h["tier"]]
+        ax.barh([0], [100], color=panel, height=1)
+        ax.barh([0], [h["hp"]], color=col, height=1)
+        for x in range(10, 100, 10):                      # segment notches like a game HP bar
+            ax.axvline(x, color=bg, lw=2)
+        ax.set_xlim(0, 100); ax.set_ylim(-0.5, 0.5); ax.axis("off")
+        ax.text(1, 0, "HP", color=bg, fontsize=12, weight="bold", va="center")
+        fig.text(0.97, 0.855, f"{h['hp']:.0f} / 100  {TIER_ICONS[h['tier']]} {h['tier']}",
+                 color=ink, fontsize=12, weight="bold", ha="right")
+
+        # Radar
+        n = len(t)
+        ang = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        ax = fig.add_axes([0.02, 0.05, 0.42, 0.66], polar=True, facecolor=bg)
+        ax.set_theta_offset(np.pi / 2); ax.set_theta_direction(-1)
+        for r in (25, 50, 75, 100):
+            ax.plot(np.append(ang, ang[0]), [r] * (n + 1), color="#3a3a38", lw=1)
+        for a in ang:
+            ax.plot([a, a], [0, 100], color="#3a3a38", lw=1)
+        vals = np.append(t["score"].values, t["score"].values[0])
+        ax.fill(np.append(ang, ang[0]), vals, color=blue, alpha=0.35)
+        ax.plot(np.append(ang, ang[0]), vals, color=blue, lw=2)
+        ax.plot(ang, t["score"], "o", ms=8, color=blue, mec=bg, mew=2)
+        ax.set_ylim(0, 100); ax.set_yticks([]); ax.spines["polar"].set_visible(False)
+        ax.set_xticks(ang, [s.upper() for s in t["stat"]], color=ink, fontsize=9, weight="bold")
+        ax.tick_params(axis="x", pad=8)
+
+        # Stat bars
+        ax = fig.add_axes([0.56, 0.08, 0.41, 0.62], facecolor=bg)
+        y = np.arange(n)[::-1]
+        for yi, r in zip(y, t.itertuples()):
+            c = TIER_COLORS[r.tier]
+            ax.barh(yi, 100, color=panel, height=0.55)
+            ax.barh(yi, r.score, color=c, height=0.55)
+            for x in range(10, 100, 10):
+                ax.plot([x, x], [yi - 0.275, yi + 0.275], color=bg, lw=1.5)
+            ax.text(-3, yi + 0.02, r.stat.upper(), color=ink, ha="right", va="center",
+                    fontsize=10, weight="bold")
+            ax.text(103, yi + 0.02, f"{r.score:3.0f} {TIER_ICONS[r.tier]} {r.tier}", color=ink,
+                    va="center", fontsize=9.5)
+            ax.text(0, yi - 0.42, r.indicator, color=ink2, fontsize=7, va="center")
+        ax.set_xlim(0, 100); ax.set_ylim(-0.8, n - 0.4); ax.axis("off")
+        return to_base64(fig)
