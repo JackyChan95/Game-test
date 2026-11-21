@@ -49,20 +49,23 @@ export function presence(tile: Tile): Side | null {
  * Tile control follows the front line. In each lane, every tile from a side's
  * base up to its furthest-forward unit or bunker belongs to that side. Tiles
  * between the two fronts are neutral, so when the front units on both sides
- * fall, the ground they stood on goes back to neutral. (Units can't pass
- * enemies, so the two sides' pieces never interleave in a lane.)
+ * fall, the ground they stood on goes back to neutral. Units can't pass
+ * enemies, so the two sides' pieces only meet on a contested home-column tile,
+ * which nobody holds.
  */
 export function syncOwners(state: GameState) {
   for (const lane of state.lanes) {
     let playerFront = -1;
     let enemyFront = lane.length;
+    const has = (tile: Tile, side: Side) => tile.units.some((u) => u.owner === side) || tile.bunker?.owner === side;
     lane.forEach((tile, col) => {
-      const side = presence(tile);
-      if (side === 'player') playerFront = Math.max(playerFront, col);
-      if (side === 'enemy') enemyFront = Math.min(enemyFront, col);
+      if (has(tile, 'player')) playerFront = Math.max(playerFront, col);
+      if (has(tile, 'enemy')) enemyFront = Math.min(enemyFront, col);
     });
     lane.forEach((tile, col) => {
-      tile.owner = col <= playerFront ? 'player' : col >= enemyFront ? 'enemy' : null;
+      // A tile with both sides on it (a fight at a home column) is contested: nobody holds it.
+      const contested = has(tile, 'player') && has(tile, 'enemy');
+      tile.owner = contested ? null : col <= playerFront ? 'player' : col >= enemyFront ? 'enemy' : null;
     });
   }
 }

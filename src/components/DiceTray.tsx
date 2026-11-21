@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { EVENTS, type GameState } from '../../game';
+import { EVENTS, INCOME, type GameState } from '../../game';
 import { C } from '../theme';
 import { Die } from './Die';
 
@@ -27,17 +27,20 @@ export function DiceTray({ game, rollKey, caption }: { game: GameState; rollKey:
         {p ? (
           <>
             <View style={styles.roll}>
-              <Die value={p.dice[0]} rollKey={rollKey} color={C.player} />
-              <Die value={p.dice[1]} rollKey={rollKey} color={C.player} />
+              <Text style={styles.small}>{INCOME.base} +</Text>
+              {p.dice.map((d, i) => (
+                <Die key={i} value={d} rollKey={rollKey} color={C.player} sides={INCOME.die} />
+              ))}
               <Text style={styles.rollText}>
-                +{p.total}
-                {p.bonus ? <Text style={styles.small}>{`  (${p.bonus} depot)`}</Text> : null}
+                = +{p.total}
+                {p.bonus ? <Text style={styles.small}>{`  (incl. ${p.bonus} depot)`}</Text> : null}
               </Text>
             </View>
             <View style={styles.roll}>
               <Text style={[styles.small, { marginRight: 2 }]}>AI</Text>
-              <Die value={e.dice[0]} rollKey={rollKey} size={20} color={C.enemy} />
-              <Die value={e.dice[1]} rollKey={rollKey} size={20} color={C.enemy} />
+              {e.dice.map((d, i) => (
+                <Die key={i} value={d} rollKey={rollKey} size={20} color={C.enemy} sides={INCOME.die} />
+              ))}
               <Text style={styles.small}>+{e.total}</Text>
             </View>
           </>

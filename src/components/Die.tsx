@@ -17,10 +17,12 @@ interface Props {
   rollKey: unknown;
   size?: number;
   color?: string;
+  /** Faces the die can show while it tumbles. */
+  sides?: number;
 }
 
 /** A small die that tumbles briefly, then settles on its value. */
-export function Die({ value, rollKey, size = 30, color = C.ink }: Props) {
+export function Die({ value, rollKey, size = 30, color = C.ink, sides = 6 }: Props) {
   const [face, setFace] = useState(value);
   const spin = useRef(new Animated.Value(1)).current;
 
@@ -36,10 +38,10 @@ export function Die({ value, rollKey, size = 30, color = C.ink }: Props) {
       if (ticks >= 7) {
         clearInterval(id);
         setFace(value);
-      } else setFace(1 + Math.floor(Math.random() * 6));
+      } else setFace(1 + Math.floor(Math.random() * sides));
     }, 65);
     return () => clearInterval(id);
-  }, [rollKey, value, spin]);
+  }, [rollKey, value, spin, sides]);
 
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] });
   const scale = spin.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.8, 1.06, 1] });

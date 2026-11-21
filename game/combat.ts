@@ -64,8 +64,9 @@ export function findTarget(
     ? { bunker: 0, base: 1, meleeClose: 2, melee: 2, back: 3 }
     : { bunker: 1, base: 4, meleeClose: 0, melee: 2, back: 3 };
   const options: { t: Target; rank: number; dist: number }[] = [];
-  for (let d = 1; d <= range; d++) {
-    for (const dir of dirs) {
+  // d = 0 is the attacker's own tile: enemies can share it on a contested home column.
+  for (let d = 0; d <= range; d++) {
+    for (const dir of d === 0 ? [dirs[0]] : dirs) {
       const c = col + dir * d;
       if (c === BASE_COL[foe]) options.push({ t: { type: 'base', side: foe }, rank: R.base, dist: d });
       if (c < 0 || c >= COLS) continue;
@@ -80,7 +81,7 @@ export function findTarget(
       for (const u of tile.units) {
         if (u.owner !== foe || sheltered) continue;
         const melee = UNITS[u.kind].role === 'melee';
-        const rank = melee ? (d === 1 ? R.meleeClose : R.melee) : R.back;
+        const rank = melee ? (d <= 1 ? R.meleeClose : R.melee) : R.back;
         options.push({ t: { type: 'unit', lane, col: c, id: u.id }, rank, dist: d });
       }
     }

@@ -1,4 +1,4 @@
-import { BUNKERS, SUPPLY_CAP } from './config';
+import { BUNKERS, INCOME, SUPPLY_CAP } from './config';
 import { allBunkers } from './board';
 import type { DiceRoll, GameState, Side } from './types';
 import type { Rng } from './rng';
@@ -18,11 +18,11 @@ export function nextSupply(current: number, income: number): number {
   return Math.min(SUPPLY_CAP, current + income);
 }
 
-/** Roll 2d6 (+ depots) and add to the side's supply. Mutates state. */
+/** Base income + one die (+ depots), added to the side's supply. Mutates state. */
 export function applyIncome(state: GameState, side: Side, rng: Rng): DiceRoll {
-  const dice = [rng.d6(), rng.d6()];
+  const dice = [rng.int(1, INCOME.die)];
   const bonus = depotIncome(state, side);
-  const total = dice[0] + dice[1] + bonus;
+  const total = INCOME.base + dice[0] + bonus;
   const p = state.players[side];
   p.supply = nextSupply(p.supply, total);
   return { label: side === 'player' ? 'Your income' : 'AI income', dice, bonus, total };

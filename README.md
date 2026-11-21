@@ -22,7 +22,7 @@ that ground goes back to neutral. Every tile starts neutral.
 
 **Each round:**
 
-1. **Income.** Each side rolls 2d6 and adds +1 for each Depot (+2 if the Depot is upgraded). Unspent supply carries over, capped at 15.
+1. **Income.** Each side gets 5 supply plus a d4 roll (6–9), and +1 for each Depot (+2 if the Depot is upgraded). Unspent supply carries over, capped at 15.
 2. **Event.** One random event is drawn (see below).
 3. **Build.** You build, upgrade and train. Then the AI does the same.
 4. **Clash: attack, then move.**
@@ -41,8 +41,8 @@ that ground goes back to neutral. Every tile starts neutral.
 5. **Win check.**
 
 **Where you can build.** Bunkers go on any tile without a bunker that you hold (anywhere behind
-your front line), or on a neutral tile in your first two columns. Units train on your home column (column 1) or on any
-tile with one of your bunkers, as long as no enemy is there. So bunkers act as forward spawn points.
+your front line), or on a neutral tile in your first two columns. Units can always train on your home column (column 1), even while enemies stand there, and on any
+tile with one of your bunkers as long as no enemy is there. So bunkers act as forward spawn points.
 
 | Bunker | Cost | HP | Attack | Upgrade (once) |
 |---|---|---|---|---|
@@ -77,20 +77,24 @@ all your units of that type, including those already on the board. Upgraded unit
 
 The Depot has no attack, so its upgrade adds income where other bunkers gain damage.
 
-**Base defences.** Each base defends the tile right in front of it, in every lane:
+**Base defences.** Each base defends the tile right in front of it (your home column), in every lane:
+
+- *Contesting it:* you can keep training units onto that tile even when the enemy has taken it. Both
+  sides' units then share the tile and fight there (attacks reach your own tile); nobody holds a
+  contested tile, and no bunkers can be built on it until one side is cleared off. The AI does the
+  same, training melee units onto its home tile until it outweighs yours there.
 
 - *Base guns* (automatic): during each clash, the base fires at the enemy on that tile for 2–3 damage,
   using the normal target order.
 - *Barrage* (4 supply, once per lane per round): while the enemy holds the tile in front of your
   base, tap it and call a barrage. Every enemy unit and building on that tile takes 3 damage at
-  once, ignoring building shelter. Useful because an enemy on that tile also stops you training
-  units there. The AI barrages whenever you take the tile in front of its base.
+  once, ignoring building shelter. The AI barrages whenever you take the tile in front of its base.
 
 **Events** (each equally likely):
 
 - **Supply Drop:** both sides get +3 supply (still capped at 15).
 - **Blizzard:** ranged attacks (Snipers, Turrets) deal −1 this round.
-- **Mercenary Offer:** the side with less supply gets a free Brute (nobody gets it on a tie).
+- **Mercenary Offer:** the side with the weaker army on the board (by total unit cost) gets a free Grunt, or a Brute from round 8 on. Nobody gets one when the armies are even. (Based on army rather than supply, so it can't be farmed by spending or saving.)
 - **Sabotage:** a random bunker on the board takes 2 damage.
 - **Calm:** nothing happens.
 
@@ -99,11 +103,11 @@ bases still stand after round 20, the side holding more tiles wins, and base HP 
 bases fall in the same round, the same tiles-then-HP comparison decides.
 
 **Balance notes.** The numbers were tuned with simulated games (500 per matchup). With the AI playing
-both sides, about 96% of games end with a base destroyed, at a median of round 11 (half of games end
-between rounds 9 and 13). Against a player making random moves the AI wins about 58%. An early Depot
-improves win rate by about 5%; unit upgrades are worth roughly what they cost. Each of the six units
-earns its cost: stopping the AI from training any one of them changes its win rate by at most a few
-percent (Grunts and Snipers matter most).
+both sides, about 81% of games end with a base destroyed, at a median of round 15 (half of games end
+between rounds 12 and 19); being able to contest your home tile makes defending easier, so games run
+longer than before. An early Depot improves win rate by about 5%; unit upgrades are worth roughly
+what they cost; each of the six units earns its cost. A player making random moves currently wins
+about half its games against the AI, partly because Mercenary Offer helps the weaker army.
 
 **AI.** The AI is rule-based, and can play either side (the tests and balance simulations use this).
 Each step it picks a focus lane, which is the lane where the player's
@@ -128,7 +132,7 @@ game/                    Pure game logic, no React imports
   rng.ts                 Seeded RNG (mulberry32) + string → seed hashing
   board.ts               Small helpers (clone, tile counting, logging)
   build.ts               Build-phase validation and actions
-  income.ts              2d6 + depot income, supply cap
+  income.ts              Base + d4 + depot income, supply cap
   events.ts              Random events
   combat.ts              Targeting, simultaneous attacks, healing, movement
   ai.ts                  Rule-based opponent

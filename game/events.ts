@@ -1,5 +1,5 @@
-import { BUNKERS, EVENTS, EVENT_KINDS, HOME_COL } from './config';
-import { addSupply, allBunkers, pushLog, SIDE, syncOwners } from './board';
+import { BUNKERS, EVENTS, EVENT_KINDS, HOME_COL, MERCENARY_BRUTE_ROUND, UNITS } from './config';
+import { addSupply, allBunkers, allUnits, pushLog, SIDE, syncOwners } from './board';
 import { isSpawnTile, makeUnit } from './build';
 import type { EventKind, GameState, Side, UnitKind } from './types';
 import type { Rng } from './rng';
@@ -40,14 +40,20 @@ export function applyEvent(state: GameState, event: EventKind, rng: Rng) {
       addSupply(state, 'enemy', 3);
       break;
     case 'mercenary': {
-      const { player, enemy } = state.players;
-      if (player.supply === enemy.supply) {
-        pushLog(state, 'Supply is tied; the mercenary walks away.');
+      // Goes to the side with less army on the board (by unit cost), so spending
+      // or saving supply can't be used to farm it. A Grunt early, a Brute later.
+      const army = (side: Side) =>
+        allUnits(state).filter(({ unit }) => unit.owner === side).reduce((n, { unit }) => n + UNITS[unit.kind].cost, 0);
+      const p = army('player');
+      const e = army('enemy');
+      if (p === e) {
+        pushLog(state, 'The armies are even; the mercenary walks away.');
         break;
       }
-      const side: Side = player.supply < enemy.supply ? 'player' : 'enemy';
-      if (placeFreeUnit(state, side, 'brute')) pushLog(state, `${SIDE[side]} hired a free Brute.`);
-      else pushLog(state, `${SIDE[side]} had no room for the Brute.`);
+      const side: Side = p < e ? 'player' : 'enemy';
+      const kind = state.round >= MERCENARY_BRUTE_ROUND ? 'brute' : 'grunt';
+      placeFreeUnit(state, side, kind);
+      pushLog(state, `${SIDE[side]} hired a free ${UNITS[kind].name}.`);
       break;
     }
     case 'sabotage': {

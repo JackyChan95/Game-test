@@ -7,6 +7,8 @@ export const MAX_ROUNDS = 20;
 export const BASE_HP = 25;
 export const SUPPLY_CAP = 15;
 export const STARTING_SUPPLY = 4;
+/** Income each round: a fixed base plus one roll of a small die (6–9 supply). */
+export const INCOME = { base: 5, die: 4 };
 /** Each base fires every round at the enemy on the tile in front of it, in every lane. */
 export const BASE_GUN_DAMAGE: [number, number] = [2, 3];
 /** Barrage: hits every enemy unit and building on the tile in front of your base. Once per lane per round. */
@@ -104,10 +106,13 @@ export const UNIT_KINDS: UnitKind[] = ['grunt', 'sniper', 'brute', 'scout', 'sap
 export const EVENTS: Record<EventKind, { name: string; text: string }> = {
   supplyDrop: { name: 'Supply Drop', text: 'Both sides gain +3 supply.' },
   blizzard: { name: 'Blizzard', text: 'Ranged attacks deal -1 this round.' },
-  mercenary: { name: 'Mercenary Offer', text: 'Lower-supply side gets a free Brute.' },
+  mercenary: { name: 'Mercenary Offer', text: 'The side with the weaker army gets a free unit.' },
   sabotage: { name: 'Sabotage', text: 'A random bunker takes 2 damage.' },
   calm: { name: 'Calm', text: 'Nothing happens.' },
 };
+
+/** From this round on, Mercenary Offer gives a Brute instead of a Grunt. */
+export const MERCENARY_BRUTE_ROUND = 8;
 
 export const EVENT_KINDS: EventKind[] = ['supplyDrop', 'blizzard', 'mercenary', 'sabotage', 'calm'];
 

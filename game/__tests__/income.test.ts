@@ -2,16 +2,26 @@ import { describe, expect, it } from '@jest/globals';
 import { applyIncome, depotIncome, nextSupply } from '../income';
 import { applyEvent } from '../events';
 import { createRng } from '../rng';
-import { BUNKERS } from '../config';
-import { emptyGame, fixedRng, putBunker } from './helpers';
+import { BUNKERS, INCOME, MERCENARY_BRUTE_ROUND } from '../config';
+import { emptyGame, fixedRng, putBunker, putUnit } from './helpers';
 
 describe('income', () => {
-  it('adds 2d6 to supply', () => {
+  it('adds the base income plus one small die', () => {
     const s = emptyGame();
-    const roll = applyIncome(s, 'player', fixedRng(4));
-    expect(roll.dice).toEqual([4, 4]);
-    expect(roll.total).toBe(8);
-    expect(s.players.player.supply).toBe(8);
+    const roll = applyIncome(s, 'player', fixedRng(3));
+    expect(roll.dice).toEqual([3]);
+    expect(roll.total).toBe(INCOME.base + 3);
+    expect(s.players.player.supply).toBe(INCOME.base + 3);
+  });
+
+  it('income stays within a narrow band', () => {
+    const rng = createRng(9);
+    for (let i = 0; i < 300; i++) {
+      const s = emptyGame();
+      const { total } = applyIncome(s, 'player', rng);
+      expect(total).toBeGreaterThanOrEqual(INCOME.base + 1);
+      expect(total).toBeLessThanOrEqual(INCOME.base + INCOME.die);
+    }
   });
 
   it('carries over unspent supply, capped at 15', () => {
@@ -31,7 +41,7 @@ describe('income', () => {
     expect(depotIncome(s, 'player')).toBe(3);
     expect(depotIncome(s, 'enemy')).toBe(1);
     const roll = applyIncome(s, 'player', fixedRng(1));
-    expect(roll.total).toBe(5);
+    expect(roll.total).toBe(INCOME.base + 1 + 3);
   });
 
   it('dice are always between 1 and 6', () => {
@@ -53,13 +63,26 @@ describe('events', () => {
     expect(s.players.enemy.supply).toBe(3);
   });
 
-  it('mercenary gives a Brute to the lower-supply side', () => {
+  it('mercenary goes to the weaker army, not the side with less supply', () => {
     const s = emptyGame();
-    s.players.enemy.supply = 5;
+    s.round = 2;
+    s.players.player.supply = 0; // spending everything does not earn the mercenary
+    s.players.enemy.supply = 10;
+    putUnit(s, 'player', 0, 1, 'brute');
+    putUnit(s, 'enemy', 0, 3, 'grunt');
     applyEvent(s, 'mercenary', fixedRng(1));
-    const brutes = s.lanes.flat().flatMap((t) => t.units);
-    expect(brutes).toHaveLength(1);
-    expect(brutes[0]).toMatchObject({ kind: 'brute', owner: 'player' });
+    const enemy = s.lanes.flat().flatMap((t) => t.units).filter((u) => u.owner === 'enemy');
+    expect(enemy.map((u) => u.kind).sort()).toEqual(['grunt', 'grunt']);
+  });
+
+  it('mercenary sends a Brute only later in the game, and nobody gets one when armies are even', () => {
+    const s = emptyGame();
+    applyEvent(s, 'mercenary', fixedRng(1));
+    expect(s.lanes.flat().flatMap((t) => t.units)).toHaveLength(0);
+    s.round = MERCENARY_BRUTE_ROUND;
+    putUnit(s, 'enemy', 0, 3, 'grunt');
+    applyEvent(s, 'mercenary', fixedRng(1));
+    expect(s.lanes.flat().flatMap((t) => t.units).find((u) => u.owner === 'player')?.kind).toBe('brute');
   });
 
   it('sabotage deals 2 damage to a bunker', () => {

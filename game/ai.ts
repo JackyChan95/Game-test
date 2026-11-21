@@ -9,7 +9,7 @@
  * upgrade. It repeats until it can't afford anything, so it spends most of its
  * supply.
  */
-import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNIT_KINDS, UNIT_UPGRADES, UNITS } from './config';
+import { BASE_COL, BUNKERS, COLS, DIR, HOME_COL, MAX_ROUNDS, UNIT_KINDS, UNIT_UPGRADES, UNITS } from './config';
 import { other } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
@@ -150,11 +150,25 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
   const { units, bunkers, depots } = count(state, me);
   const supply = state.players[me].supply;
 
-  // 0. The opponent holds the tile in front of our base: barrage it.
+  // 0. The opponent is on the tile in front of our base: barrage it, then
+  //    train melee units onto it until our side outweighs theirs there.
   for (const l of [0, 1, 2]) {
     if (!canBarrage(state, me, l)) {
       barrage(state, me, l);
       return true;
+    }
+  }
+  const home = HOME_COL[me];
+  for (const l of [0, 1, 2]) {
+    const units = state.lanes[l][home].units;
+    const theirs = units.filter((u) => u.owner !== me).reduce((n, u) => n + UNITS[u.kind].cost, 0);
+    const ours = units.filter((u) => u.owner === me).reduce((n, u) => n + UNITS[u.kind].cost, 0);
+    if (theirs > 0 && ours <= theirs) {
+      const kind: UnitKind = !canTrainUnit(state, me, l, home, 'brute') ? 'brute' : 'grunt';
+      if (!canTrainUnit(state, me, l, home, kind)) {
+        trainUnit(state, me, l, home, kind);
+        return true;
+      }
     }
   }
 

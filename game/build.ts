@@ -15,6 +15,7 @@ export function canBuildBunker(
   const tile = state.lanes[lane][col];
   if (tile.bunker) return 'Tile already has a bunker';
   if (tile.owner && tile.owner !== side) return 'The AI holds this tile';
+  if (tile.units.some((u) => u.owner !== side)) return 'Enemy units here';
   if (tile.owner !== side && !inHomeZone(side, col)) return 'Build in your first two columns or behind your front line';
   if (state.players[side].supply < BUNKERS[kind].cost) return 'Not enough supply';
   return null;
@@ -33,12 +34,16 @@ export function canUpgradeBunker(state: GameState, side: Side, lane: number, col
 /** Your first HOME_ZONE columns, where you may build on empty tiles. */
 export const inHomeZone = (side: Side, col: number) => Math.abs(col - BASE_COL[side]) <= HOME_ZONE;
 
-/** Units can be trained on your home column, or on any tile with your bunker, if no enemy is there. */
+/**
+ * Units can always be trained on your home column, even with enemies on it
+ * (they fight it out on that tile), and on any tile with your bunker while no
+ * enemy is there.
+ */
 export function isSpawnTile(state: GameState, side: Side, lane: number, col: number): boolean {
   if (!inBounds(lane, col)) return false;
+  if (col === HOME_COL[side]) return true;
   const tile = state.lanes[lane][col];
-  if (tile.owner === other(side)) return false;
-  return col === HOME_COL[side] || tile.bunker?.owner === side;
+  return tile.bunker?.owner === side && !tile.units.some((u) => u.owner !== side);
 }
 
 export function canTrainUnit(

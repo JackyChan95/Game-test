@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
@@ -9,20 +9,29 @@ import { ResultsScreen } from './src/screens/ResultsScreen';
 import { C } from './src/theme';
 
 export default function App() {
-  const { game, start, dispatch, quit } = useGame();
+  const { game, gameKey, start, dispatch, quit } = useGame();
   const [showResults, setShowResults] = useState(false);
-
-  // Back to the board whenever a new game starts.
-  useEffect(() => {
-    if (game?.phase !== 'gameOver') setShowResults(false);
-  }, [game?.phase]);
   const onGameOver = useCallback(() => setShowResults(true), []);
 
+  // Leave the results screen in the same update that starts or quits a game,
+  // so it never renders with a game that has no result yet.
+  const newGame = useCallback((seed: string) => {
+    setShowResults(false);
+    start(seed);
+  }, [start]);
+  const toMenu = useCallback(() => {
+    setShowResults(false);
+    quit();
+  }, [quit]);
+
   let screen;
-  if (!game) screen = <NewGameScreen onStart={start} />;
-  else if (showResults) {
-    screen = <ResultsScreen game={game} onRematch={() => start(game.seed)} onNewGame={quit} />;
-  } else screen = <GameScreen game={game} dispatch={dispatch} onQuit={quit} onGameOver={onGameOver} />;
+  if (!game) screen = <NewGameScreen onStart={newGame} />;
+  else if (showResults && game.result) {
+    screen = <ResultsScreen game={game} onRematch={() => newGame(game.seed)} onNewGame={toMenu} />;
+  } else {
+    // `key` gives each game a fresh screen (replay and selection state reset).
+    screen = <GameScreen key={gameKey} game={game} dispatch={dispatch} onQuit={toMenu} onGameOver={onGameOver} />;
+  }
 
   return (
     <SafeAreaProvider>

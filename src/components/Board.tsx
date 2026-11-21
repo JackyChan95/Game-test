@@ -46,11 +46,14 @@ interface Stack {
   alive: Unit[];
 }
 
+/** One stack per side and kind; on a contested tile your stacks come first. */
 function stacksOf(tile: Tile): Stack[] {
-  return UNIT_KINDS.map((kind) => {
-    const units = tile.units.filter((u) => u.kind === kind);
-    return { kind, units, alive: units.filter((u) => u.hp > 0) };
-  }).filter((s) => s.units.length > 0);
+  return (['player', 'enemy'] as Side[]).flatMap((side) =>
+    UNIT_KINDS.map((kind) => {
+      const units = tile.units.filter((u) => u.kind === kind && u.owner === side);
+      return { kind, units, alive: units.filter((u) => u.hp > 0) };
+    }),
+  ).filter((s) => s.units.length > 0);
 }
 
 /** Scales a piece in when it first appears on the board. */
