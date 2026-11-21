@@ -20,7 +20,7 @@
  * There is no limit on units per tile. Tile control follows the front line
  * (see syncOwners).
  */
-import { BASE_COL, BUNKERS, COLS, DIR, UNITS } from './config';
+import { BASE_COL, BASE_GUN_DAMAGE, BUNKERS, COLS, DIR, UNITS } from './config';
 import { other, pushLog, syncOwners } from './board';
 import { unitStats } from './build';
 import type { GameState, Side, Unit } from './types';
@@ -226,6 +226,13 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
       }
     }),
   );
+  // Base guns: each base fires at the enemy on the tile in front of it, in every lane.
+  for (const side of ['player', 'enemy'] as Side[]) {
+    state.lanes.forEach((_, l) => {
+      const target = findTarget(state, side, l, BASE_COL[side], 1, [DIR[side]], alive);
+      if (target) add(`${side === 'player' ? 'Your' : 'AI'} base guns (L${l + 1})`, target, BASE_GUN_DAMAGE, false);
+    });
+  }
   return attacks;
 }
 

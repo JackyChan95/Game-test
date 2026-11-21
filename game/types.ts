@@ -32,6 +32,8 @@ export interface PlayerState {
   baseHp: number;
   /** Unit types this side has researched the upgrade for. */
   upgrades: Record<UnitKind, boolean>;
+  /** Lanes this side has already called a barrage in this round. */
+  barraged: number[];
 }
 
 export interface DiceRoll {
@@ -94,4 +96,5 @@ export type Action =
   | { type: 'upgradeBunker'; lane: number; col: number }
   | { type: 'trainUnit'; lane: number; col: number; kind: UnitKind }
   | { type: 'upgradeUnit'; kind: UnitKind }
+  | { type: 'barrage'; lane: number }
   | { type: 'endTurn' };

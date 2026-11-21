@@ -7,6 +7,10 @@ export const MAX_ROUNDS = 20;
 export const BASE_HP = 25;
 export const SUPPLY_CAP = 15;
 export const STARTING_SUPPLY = 4;
+/** Each base fires every round at the enemy on the tile in front of it, in every lane. */
+export const BASE_GUN_DAMAGE: [number, number] = [2, 3];
+/** Barrage: hits every enemy unit and building on the tile in front of your base. Once per lane per round. */
+export const BARRAGE = { cost: 4, damage: 3 };
 /** Bunkers can be built on empty tiles this many columns from your base (your home zone). */
 export const HOME_ZONE = 2;
 

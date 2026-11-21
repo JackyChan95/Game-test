@@ -2,7 +2,7 @@
  * Build-phase rules: validation and (mutating) application of build actions.
  * Callers should pass a cloned state; the engine does this for you.
  */
-import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNIT_UPGRADES, UNITS, type UpgradeStat } from './config';
+import { BARRAGE, BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNIT_UPGRADES, UNITS, type UpgradeStat } from './config';
 import { inBounds, other, pushLog, SIDE, syncOwners } from './board';
 import type { BunkerKind, GameState, Side, Unit, UnitKind } from './types';
 
@@ -113,6 +113,44 @@ export function upgradeUnit(state: GameState, side: Side, kind: UnitKind) {
     }
   }
   pushLog(state, `${SIDE[side]} researched ${up.name} (${UNITS[kind].name}s: ${up.blurb}).`);
+}
+
+/** Barrage: only on the tile in front of your own base, while the enemy holds it. */
+export function canBarrage(state: GameState, side: Side, lane: number): string | null {
+  if (state.phase !== 'build') return 'Not in build phase';
+  if (!inBounds(lane, 0)) return 'Off the map';
+  const tile = state.lanes[lane][HOME_COL[side]];
+  const foe = other(side);
+  if (!tile.units.some((u) => u.owner === foe) && tile.bunker?.owner !== foe) {
+    return 'Only when the enemy is on the tile in front of your base';
+  }
+  if (state.players[side].barraged.includes(lane)) return 'Already used in this lane this round';
+  if (state.players[side].supply < BARRAGE.cost) return 'Not enough supply';
+  return null;
+}
+
+/** Hit every enemy unit and building on the tile in front of the base. Ignores shelter. */
+export function barrage(state: GameState, side: Side, lane: number) {
+  const tile = state.lanes[lane][HOME_COL[side]];
+  const foe = other(side);
+  state.players[side].supply -= BARRAGE.cost;
+  state.players[side].barraged.push(lane);
+  let hit = 0;
+  for (const u of tile.units) {
+    if (u.owner === foe) {
+      u.hp -= BARRAGE.damage;
+      hit++;
+    }
+  }
+  if (tile.bunker?.owner === foe) {
+    tile.bunker.hp -= BARRAGE.damage;
+    hit++;
+  }
+  const lost = tile.units.filter((u) => u.owner === foe && u.hp <= 0).length;
+  tile.units = tile.units.filter((u) => u.hp > 0);
+  if (tile.bunker && tile.bunker.hp <= 0) tile.bunker = null;
+  syncOwners(state);
+  pushLog(state, `${SIDE[side]} called a barrage (L${lane + 1}): ${hit} hit for ${BARRAGE.damage}, ${lost} destroyed.`);
 }
 
 export function makeUnit(state: GameState, side: Side, kind: UnitKind): Unit {

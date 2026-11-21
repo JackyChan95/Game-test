@@ -6,7 +6,7 @@ import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY, UNIT_KINDS } from '.
 import { clone, countTiles, pushLog } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
-  upgradeUnit,
+  upgradeUnit, canBarrage, barrage,
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
@@ -18,6 +18,8 @@ import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame, UnitKin
 /** Income + event for a new round. Mutates state. */
 function startRound(state: GameState, rng: Rng) {
   state.round += 1;
+  state.players.player.barraged = [];
+  state.players.enemy.barraged = [];
   pushLog(state, `— Round ${state.round} —`);
   state.rolls = [applyIncome(state, 'player', rng), applyIncome(state, 'enemy', rng)];
   const [p, e] = state.rolls;
@@ -40,8 +42,8 @@ export function createGame(seed: string): GameState {
     phase: 'build',
     lanes,
     players: {
-      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades() },
-      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades() },
+      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades(), barraged: [] },
+      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades(), barraged: [] },
     },
     event: 'calm',
     rolls: [],
@@ -90,6 +92,8 @@ export function validateAction(state: GameState, action: Action): string | null 
       return canTrainUnit(state, 'player', action.lane, action.col, action.kind);
     case 'upgradeUnit':
       return canUpgradeUnit(state, 'player', action.kind);
+    case 'barrage':
+      return canBarrage(state, 'player', action.lane);
     case 'endTurn':
       return null;
   }
@@ -147,6 +151,9 @@ export function gameReducer(state: GameState, action: Action): GameState {
       break;
     case 'upgradeUnit':
       upgradeUnit(next, 'player', action.kind);
+      break;
+    case 'barrage':
+      barrage(next, 'player', action.lane);
       break;
     case 'trainUnit':
       trainUnit(next, 'player', action.lane, action.col, action.kind);

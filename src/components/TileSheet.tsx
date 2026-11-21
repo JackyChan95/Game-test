@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  BUNKERS, UNIT_KINDS, UNIT_UPGRADES, UNITS, unitStats, validateAction,
+  BARRAGE, BUNKERS, HOME_COL, UNIT_KINDS, UNIT_UPGRADES, UNITS, unitStats, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
@@ -88,6 +88,20 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
               </Text>
             ))}
           </View>
+        )}
+
+        {col === HOME_COL.player && tile.owner === 'enemy' && (
+          <>
+            <Text style={styles.section}>DEFEND BASE</Text>
+            <Option
+              title="Barrage"
+              detail={`${BARRAGE.damage} damage to every enemy unit and building here, now. Once per lane per round.`}
+              cost={BARRAGE.cost}
+              icon={<BunkerIcon kind="turret" color={C.enemy} detail={C.bg} size={22} />}
+              reason={validateAction(game, { type: 'barrage', lane })}
+              onPress={() => onAction({ type: 'barrage', lane })}
+            />
+          </>
         )}
 
         {b && b.owner === 'player' ? (

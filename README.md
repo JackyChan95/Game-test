@@ -77,6 +77,15 @@ all your units of that type, including those already on the board. Upgraded unit
 
 The Depot has no attack, so its upgrade adds income where other bunkers gain damage.
 
+**Base defences.** Each base defends the tile right in front of it, in every lane:
+
+- *Base guns* (automatic): during each clash, the base fires at the enemy on that tile for 2–3 damage,
+  using the normal target order.
+- *Barrage* (4 supply, once per lane per round): while the enemy holds the tile in front of your
+  base, tap it and call a barrage. Every enemy unit and building on that tile takes 3 damage at
+  once, ignoring building shelter. Useful because an enemy on that tile also stops you training
+  units there. The AI barrages whenever you take the tile in front of its base.
+
 **Events** (each equally likely):
 
 - **Supply Drop:** both sides get +3 supply (still capped at 15).

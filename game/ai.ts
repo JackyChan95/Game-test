@@ -2,6 +2,7 @@
  * Rule-based AI. It normally plays the enemy side, but takes the side as a
  * parameter so it can also play the player side in simulations and tests.
  *
+ * If the opponent holds the tile in front of its base, it barrages it first.
  * Each step it picks a focus lane (where the opponent's force most outweighs
  * its own), then tries, in order: an early Depot, a defensive bunker if the
  * opponent is pushing, a bunker to keep units/bunkers balanced, research, a unit, an
@@ -12,7 +13,7 @@ import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNIT_KINDS, UNIT_UPGRADES, UN
 import { other } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
-  upgradeUnit,
+  upgradeUnit, canBarrage, barrage,
 } from './build';
 import type { BunkerKind, GameState, Side, UnitKind } from './types';
 import type { Rng } from './rng';
@@ -148,6 +149,14 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
   const lanesByNeed = [lane, ...[0, 1, 2].filter((l) => l !== lane)];
   const { units, bunkers, depots } = count(state, me);
   const supply = state.players[me].supply;
+
+  // 0. The opponent holds the tile in front of our base: barrage it.
+  for (const l of [0, 1, 2]) {
+    if (!canBarrage(state, me, l)) {
+      barrage(state, me, l);
+      return true;
+    }
+  }
 
   // 1. Economy early on: one Depot, built at the back of the quietest lane.
   if (state.round <= 4 && depots === 0 && supply >= BUNKERS.depot.cost + 2) {
