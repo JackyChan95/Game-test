@@ -1,36 +1,44 @@
 import { describe, expect, it } from '@jest/globals';
-import { applyIncome, depotIncome, nextSupply } from '../income';
+import { applyIncome, depotIncome, rollIncome } from '../income';
+import { createGame } from '../engine';
 import { applyEvent } from '../events';
 import { createRng } from '../rng';
 import { BUNKERS, INCOME, MERCENARY_BRUTE_ROUND } from '../config';
 import { emptyGame, fixedRng, putBunker, putUnit } from './helpers';
 
 describe('income', () => {
-  it('adds the base income plus one small die', () => {
+  it('adds the base income plus the roll', () => {
     const s = emptyGame();
-    const roll = applyIncome(s, 'player', fixedRng(3));
+    const roll = applyIncome(s, 'player', 3);
     expect(roll.dice).toEqual([3]);
     expect(roll.total).toBe(INCOME.base + 3);
     expect(s.players.player.supply).toBe(INCOME.base + 3);
   });
 
-  it('income stays within a narrow band', () => {
+  it('rolls within a narrow band', () => {
     const rng = createRng(9);
     for (let i = 0; i < 300; i++) {
-      const s = emptyGame();
-      const { total } = applyIncome(s, 'player', rng);
-      expect(total).toBeGreaterThanOrEqual(INCOME.base + 1);
-      expect(total).toBeLessThanOrEqual(INCOME.base + INCOME.die);
+      const r = rollIncome(rng);
+      expect(r).toBeGreaterThanOrEqual(1);
+      expect(r).toBeLessThanOrEqual(INCOME.die);
     }
   });
 
-  it('carries over unspent supply, capped at 15', () => {
-    expect(nextSupply(5, 7)).toBe(12);
-    expect(nextSupply(10, 12)).toBe(15);
+  it('carries over unspent supply with no cap', () => {
     const s = emptyGame();
-    s.players.player.supply = 9;
-    applyIncome(s, 'player', fixedRng(6));
-    expect(s.players.player.supply).toBe(15);
+    s.players.player.supply = 40;
+    applyIncome(s, 'player', INCOME.die);
+    expect(s.players.player.supply).toBe(40 + INCOME.base + INCOME.die);
+  });
+
+  it('both sides get the same income each round, apart from depots', () => {
+    for (let i = 0; i < 20; i++) {
+      const g = createGame(`same-${i}`);
+      const [p, e] = g.rolls;
+      expect(p.dice).toEqual(e.dice);
+      expect(p.total).toBe(e.total);
+      expect(g.players.player.supply).toBe(g.players.enemy.supply);
+    }
   });
 
   it('depots add +1 each, upgraded depots +2', () => {
@@ -40,7 +48,7 @@ describe('income', () => {
     putBunker(s, 'enemy', 0, 4, 'depot');
     expect(depotIncome(s, 'player')).toBe(3);
     expect(depotIncome(s, 'enemy')).toBe(1);
-    const roll = applyIncome(s, 'player', fixedRng(1));
+    const roll = applyIncome(s, 'player', 1);
     expect(roll.total).toBe(INCOME.base + 1 + 3);
   });
 
@@ -55,11 +63,11 @@ describe('income', () => {
 });
 
 describe('events', () => {
-  it('supply drop gives both sides +3 (capped)', () => {
+  it('supply drop gives both sides +3, uncapped', () => {
     const s = emptyGame();
     s.players.player.supply = 14;
     applyEvent(s, 'supplyDrop', fixedRng(1));
-    expect(s.players.player.supply).toBe(15);
+    expect(s.players.player.supply).toBe(17);
     expect(s.players.enemy.supply).toBe(3);
   });
 

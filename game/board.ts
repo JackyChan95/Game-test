@@ -1,4 +1,4 @@
-import { COLS, LANES, SUPPLY_CAP } from './config';
+import { COLS, LANES } from './config';
 import type { GameState, Side, Tile, Unit, Bunker } from './types';
 
 export const other = (side: Side): Side => (side === 'player' ? 'enemy' : 'player');
@@ -13,7 +13,7 @@ export const tileAt = (state: GameState, lane: number, col: number): Tile => sta
 
 export const addSupply = (state: GameState, side: Side, amount: number) => {
   const p = state.players[side];
-  p.supply = Math.min(SUPPLY_CAP, p.supply + amount);
+  p.supply += amount;
 };
 
 export function countTiles(state: GameState, side: Side): number {

@@ -125,9 +125,9 @@ function chooseUnit(state: GameState, me: Side, lane: number, rng: Rng): UnitKin
     grunt: 3,
     sniper: 2.5,
     brute: 2.5,
-    scout: state.round <= 5 ? 1.5 : 0.5,
-    sapper: foeBuildings > 0 ? 2.5 : 0.3,
-    medic: mine.length >= 3 && medics < Math.floor(mine.length / 4) + 1 ? 2 : 0,
+    scout: state.round <= 5 ? 0.6 : 0.2,
+    sapper: foeBuildings > 0 ? 1.5 : 0,
+    medic: mine.length >= 4 && medics < Math.floor(mine.length / 5) + 1 ? 1.2 : 0,
   };
   for (const k of UNIT_KINDS) {
     if (supply < UNITS[k].cost) weights[k] = 0;

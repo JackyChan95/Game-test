@@ -6,7 +6,7 @@ import { C } from '../theme';
 
 const RULES = [
   'Three lanes, five tiles each. Your base is on the left.',
-  'Each round you get 5 supply plus a d4 roll (carries over, max 15).',
+  'Each round both sides get the same income: 5 supply plus one shared d4 roll. Unspent supply carries over.',
   'Tap a tile to build or train. Units train on your home column (even if the enemy is on it) or on tiles with your bunker. You hold every tile up to your furthest unit.',
   'End the turn: everything in range attacks (each piece has a damage range, like 2–4), then units advance one tile.',
   'Destroy the AI base (25 HP) to win. If both bases survive 20 rounds, whoever holds more tiles wins.',

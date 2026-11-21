@@ -8,7 +8,7 @@ import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
   upgradeUnit, canBarrage, barrage,
 } from './build';
-import { applyIncome } from './income';
+import { applyIncome, rollIncome } from './income';
 import { applyEvent, drawEvent } from './events';
 import { resolveClash, type Attack, type Heal } from './combat';
 import { runAiTurn } from './ai';
@@ -21,9 +21,11 @@ function startRound(state: GameState, rng: Rng) {
   state.players.player.barraged = [];
   state.players.enemy.barraged = [];
   pushLog(state, `— Round ${state.round} —`);
-  state.rolls = [applyIncome(state, 'player', rng), applyIncome(state, 'enemy', rng)];
+  // One roll for both sides, so income only differs by depots.
+  const roll = rollIncome(rng);
+  state.rolls = [applyIncome(state, 'player', roll), applyIncome(state, 'enemy', roll)];
   const [p, e] = state.rolls;
-  pushLog(state, `Income: you rolled ${p.dice.join('+')}${p.bonus ? ` +${p.bonus}` : ''}, AI rolled ${e.dice.join('+')}${e.bonus ? ` +${e.bonus}` : ''}.`);
+  pushLog(state, `Income roll: ${roll} for both sides. You +${p.total}, AI +${e.total}${p.bonus || e.bonus ? ' (incl. depots)' : ''}.`);
   state.event = drawEvent(rng);
   applyEvent(state, state.event, rng);
 }

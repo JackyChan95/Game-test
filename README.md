@@ -22,7 +22,7 @@ that ground goes back to neutral. Every tile starts neutral.
 
 **Each round:**
 
-1. **Income.** Each side gets 5 supply plus a d4 roll (6–9), and +1 for each Depot (+2 if the Depot is upgraded). Unspent supply carries over, capped at 15.
+1. **Income.** One d4 is rolled for both sides: each side gets 5 supply plus that roll (6–9), so income is identical except for Depots (+1 each, +2 if upgraded). Unspent supply carries over, with no cap.
 2. **Event.** One random event is drawn (see below).
 3. **Build.** You build, upgrade and train. Then the AI does the same.
 4. **Clash: attack, then move.**
@@ -92,7 +92,7 @@ The Depot has no attack, so its upgrade adds income where other bunkers gain dam
 
 **Events** (each equally likely):
 
-- **Supply Drop:** both sides get +3 supply (still capped at 15).
+- **Supply Drop:** both sides get +3 supply.
 - **Blizzard:** ranged attacks (Snipers, Turrets) deal −1 this round.
 - **Mercenary Offer:** the side with the weaker army on the board (by total unit cost) gets a free Grunt, or a Brute from round 8 on. Nobody gets one when the armies are even. (Based on army rather than supply, so it can't be farmed by spending or saving.)
 - **Sabotage:** a random bunker on the board takes 2 damage.
@@ -103,11 +103,10 @@ bases still stand after round 20, the side holding more tiles wins, and base HP 
 bases fall in the same round, the same tiles-then-HP comparison decides.
 
 **Balance notes.** The numbers were tuned with simulated games (500 per matchup). With the AI playing
-both sides, about 81% of games end with a base destroyed, at a median of round 15 (half of games end
-between rounds 12 and 19); being able to contest your home tile makes defending easier, so games run
-longer than before. An early Depot improves win rate by about 5%; unit upgrades are worth roughly
-what they cost; each of the six units earns its cost. A player making random moves currently wins
-about half its games against the AI, partly because Mercenary Offer helps the weaker army.
+both sides, about 80% of games end with a base destroyed, at a median of round 15 (half of games end
+between rounds 13 and 19). Against a player making random moves the AI wins about 59%. An early Depot
+improves win rate by about 5%; unit upgrades are worth roughly what they cost; each of the six units
+earns its cost. The AI trains mostly Grunts, Snipers and Brutes, using the specialists sparingly.
 
 **AI.** The AI is rule-based, and can play either side (the tests and balance simulations use this).
 Each step it picks a focus lane, which is the lane where the player's

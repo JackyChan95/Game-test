@@ -5,9 +5,8 @@ export const COLS = 5;
 /** If both bases still stand after this many rounds, tiles held decide the winner. */
 export const MAX_ROUNDS = 20;
 export const BASE_HP = 25;
-export const SUPPLY_CAP = 15;
 export const STARTING_SUPPLY = 4;
-/** Income each round: a fixed base plus one roll of a small die (6–9 supply). */
+/** Income each round: a fixed base plus one die roll shared by both sides (6–9 supply). */
 export const INCOME = { base: 5, die: 4 };
 /** Each base fires every round at the enemy on the tile in front of it, in every lane. */
 export const BASE_GUN_DAMAGE: [number, number] = [2, 3];

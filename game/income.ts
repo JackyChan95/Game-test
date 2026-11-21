@@ -1,4 +1,4 @@
-import { BUNKERS, INCOME, SUPPLY_CAP } from './config';
+import { BUNKERS, INCOME } from './config';
 import { allBunkers } from './board';
 import type { DiceRoll, GameState, Side } from './types';
 import type { Rng } from './rng';
@@ -13,17 +13,15 @@ export function depotIncome(state: GameState, side: Side): number {
     }, 0);
 }
 
-/** Pure arithmetic: carry-over + income, capped. */
-export function nextSupply(current: number, income: number): number {
-  return Math.min(SUPPLY_CAP, current + income);
+/** Roll this round's income die. Both sides get the same roll. */
+export function rollIncome(rng: Rng): number {
+  return rng.int(1, INCOME.die);
 }
 
-/** Base income + one die (+ depots), added to the side's supply. Mutates state. */
-export function applyIncome(state: GameState, side: Side, rng: Rng): DiceRoll {
-  const dice = [rng.int(1, INCOME.die)];
+/** Base income + the shared roll + this side's depots, added to its supply. No cap. Mutates state. */
+export function applyIncome(state: GameState, side: Side, roll: number): DiceRoll {
   const bonus = depotIncome(state, side);
-  const total = INCOME.base + dice[0] + bonus;
-  const p = state.players[side];
-  p.supply = nextSupply(p.supply, total);
-  return { label: side === 'player' ? 'Your income' : 'AI income', dice, bonus, total };
+  const total = INCOME.base + roll + bonus;
+  state.players[side].supply += total;
+  return { label: side === 'player' ? 'Your income' : 'AI income', dice: [roll], bonus, total };
 }
