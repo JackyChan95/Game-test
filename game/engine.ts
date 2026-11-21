@@ -2,7 +2,7 @@
  * Top-level game flow. `gameReducer` is the single entry point the UI uses:
  * it never mutates its input and is fully deterministic given the seed.
  */
-import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY } from './config';
+import { BASE_HP, COLS, LANES, MAX_ROUNDS, STARTING_SUPPLY, UNIT_KINDS } from './config';
 import { clone, countTiles, pushLog } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
@@ -10,10 +10,10 @@ import {
 } from './build';
 import { applyIncome } from './income';
 import { applyEvent, drawEvent } from './events';
-import { resolveClash, type Attack } from './combat';
+import { resolveClash, type Attack, type Heal } from './combat';
 import { runAiTurn } from './ai';
 import { createRng, seedFrom, type Rng } from './rng';
-import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame } from './types';
+import type { Action, GameResult, GameState, Hit, Side, Tile, TurnFrame, UnitKind } from './types';
 
 /** Income + event for a new round. Mutates state. */
 function startRound(state: GameState, rng: Rng) {
@@ -26,6 +26,9 @@ function startRound(state: GameState, rng: Rng) {
   applyEvent(state, state.event, rng);
 }
 
+const noUpgrades = () =>
+  Object.fromEntries(UNIT_KINDS.map((k) => [k, false])) as Record<UnitKind, boolean>;
+
 export function createGame(seed: string): GameState {
   const lanes: Tile[][] = Array.from({ length: LANES }, () =>
     Array.from({ length: COLS }, () => ({ owner: null, bunker: null, units: [] })),
@@ -37,8 +40,8 @@ export function createGame(seed: string): GameState {
     phase: 'build',
     lanes,
     players: {
-      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: { grunt: false, sniper: false, brute: false } },
-      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: { grunt: false, sniper: false, brute: false } },
+      player: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades() },
+      enemy: { supply: STARTING_SUPPLY, baseHp: BASE_HP, upgrades: noUpgrades() },
     },
     event: 'calm',
     rolls: [],
@@ -93,7 +96,7 @@ export function validateAction(state: GameState, action: Action): string | null 
 }
 
 /** End the player's turn: AI builds, clash, win check, next round. Mutates state. */
-function snapshot(state: GameState, stage: TurnFrame['stage'], attacks: Attack[] = []): TurnFrame {
+function snapshot(state: GameState, stage: TurnFrame['stage'], attacks: Attack[] = [], heals: Heal[] = []): TurnFrame {
   const hits = new Map<string, Hit>();
   for (const a of attacks) {
     const t = a.target;
@@ -108,13 +111,17 @@ function snapshot(state: GameState, stage: TurnFrame['stage'], attacks: Attack[]
     hit.damage += a.damage;
     hits.set(key, hit);
   }
+  // Heals show as negative damage.
+  for (const h of heals) {
+    hits.set(`heal-${h.unitId}`, { unitId: h.unitId, lane: h.lane, col: h.col, base: null, damage: -h.amount });
+  }
   return { stage, round: state.round, lanes: clone(state.lanes), players: clone(state.players), hits: [...hits.values()] };
 }
 
 function endTurn(state: GameState, rng: Rng) {
   runAiTurn(state, rng);
   state.replay.push(snapshot(state, 'aiBuild'));
-  resolveClash(state, rng, (stage, attacks) => state.replay.push(snapshot(state, stage, attacks)));
+  resolveClash(state, rng, (stage, attacks, heals) => state.replay.push(snapshot(state, stage, attacks, heals)));
   const result = checkWinner(state);
   if (result) {
     state.result = result;

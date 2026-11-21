@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { BUNKERS, UNITS, isSpawnTile, type Action, type GameState, type TurnFrame } from '../../game';
+import { BUNKERS, UNIT_KINDS, UNITS, isSpawnTile, type Action, type GameState, type TurnFrame } from '../../game';
 import { Board } from '../components/Board';
 import { Button } from '../components/Button';
 import { CombatLog } from '../components/CombatLog';
@@ -75,7 +75,7 @@ export function GameScreen({ game, dispatch, onQuit, onGameOver }: Props) {
               <Text style={styles.legendText}>{BUNKERS[k].name}</Text>
             </View>
           ))}
-          {(['grunt', 'sniper', 'brute'] as const).map((k) => (
+          {UNIT_KINDS.map((k) => (
             <View key={k} style={styles.legendItem}>
               <UnitIcon kind={k} color={C.muted} detail={C.bg} size={13} />
               <Text style={styles.legendText}>{UNITS[k].name}</Text>

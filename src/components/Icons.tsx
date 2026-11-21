@@ -42,6 +42,28 @@ export function UnitIcon({ kind, size = 16, color, detail = 'transparent', facin
           <Path d="M9.5 8.5l4 3.5-4 3.5" stroke={detail} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </>
       )}
+      {kind === 'scout' && (
+        <>
+          {/* Double chevron: moves fast */}
+          <Path d="M4.5 5.5l6.5 6.5-6.5 6.5" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M12.5 5.5l6.5 6.5-6.5 6.5" stroke={color} strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+      {kind === 'sapper' && (
+        <>
+          {/* Charge with a lit fuse */}
+          <Circle cx="10.5" cy="14" r="7" fill={color} />
+          <Path d="M14.5 8.5l3-3" stroke={color} strokeWidth="2.4" strokeLinecap="round" />
+          <Circle cx="19" cy="4.5" r="2" fill={color} />
+        </>
+      )}
+      {kind === 'medic' && (
+        <>
+          {/* Cross */}
+          <Rect x="9" y="3.5" width="6" height="17" rx="1.2" fill={color} />
+          <Rect x="3.5" y="9" width="17" height="6" rx="1.2" fill={color} />
+        </>
+      )}
     </Svg>
   );
 }

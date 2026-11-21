@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
-  BUNKERS, UNIT_UPGRADES, UNITS, unitStats, validateAction,
+  BUNKERS, UNIT_KINDS, UNIT_UPGRADES, UNITS, unitStats, validateAction,
   type Action, type BunkerKind, type GameState, type UnitKind,
 } from '../../game';
 import { C, sideColor } from '../theme';
@@ -36,7 +36,6 @@ function Option({
 }
 
 const BUNKER_KINDS: BunkerKind[] = ['wall', 'turret', 'depot'];
-const UNIT_KINDS: UnitKind[] = ['grunt', 'sniper', 'brute'];
 
 export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
   const tile = game.lanes[lane][col];
@@ -51,10 +50,15 @@ export function TileSheet({ game, lane, col, onAction, onClose }: Props) {
   };
   const unitDetail = (k: UnitKind) => {
     const s = unitStats(game, 'player', k);
-    const armor = s.armor ? ` · armor ${s.armor}` : '';
-    const pierce = UNITS[k].pierce ? ' · ignores armor' : '';
-    const up = game.players.player.upgrades[k] ? ' · upgraded' : '';
-    return `${s.hp} HP · ${s.damage[0]}–${s.damage[1]} dmg, range ${s.range}${armor}${pierce}${up}`;
+    const parts = [`${s.hp} HP`];
+    parts.push(s.damage[1] > 0 ? `${s.damage[0]}–${s.damage[1]} dmg, range ${s.range}` : 'no attack');
+    if (s.armor) parts.push(`armor ${s.armor}`);
+    if (UNITS[k].pierce) parts.push('ignores armor');
+    if (s.speed > 1) parts.push(`moves ${s.speed}`);
+    if (s.vsStructures) parts.push(`+${s.vsStructures} vs buildings & bases`);
+    if (s.heal) parts.push(`heals ${s.heal} on its tile`);
+    if (game.players.player.upgrades[k]) parts.push('upgraded');
+    return parts.join(' · ');
   };
 
   return (

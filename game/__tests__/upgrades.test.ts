@@ -12,9 +12,9 @@ describe('unit upgrades', () => {
     putUnit(s, 'player', 0, 2, 'grunt', 4);
     upgradeUnit(s, 'player', 'grunt');
     const u = s.lanes[0][2].units[0];
-    expect(u.hp).toBe(4 + UNIT_UPGRADES.grunt.hp);
-    expect(u.maxHp).toBe(UNITS.grunt.hp + UNIT_UPGRADES.grunt.hp);
-    expect(unitStats(s, 'player', 'grunt').hp).toBe(UNITS.grunt.hp + UNIT_UPGRADES.grunt.hp);
+    expect(u.hp).toBe(4 + UNIT_UPGRADES.grunt.hp!);
+    expect(u.maxHp).toBe(UNITS.grunt.hp + UNIT_UPGRADES.grunt.hp!);
+    expect(unitStats(s, 'player', 'grunt').hp).toBe(UNITS.grunt.hp + UNIT_UPGRADES.grunt.hp!);
     expect(s.players.player.supply).toBe(15 - UNIT_UPGRADES.grunt.cost);
   });
 
@@ -65,6 +65,6 @@ describe('armor', () => {
     putUnit(s, 'enemy', 0, 3, 'brute');
     putUnit(s, 'player', 0, 2, 'grunt');
     const [a] = collectAttacks(s, lowRng, false).filter((x) => x.attacker.startsWith('Your'));
-    expect(a.damage).toBe(Math.max(1, UNITS.grunt.damage[0] - UNITS.brute.armor - UNIT_UPGRADES.brute.armor));
+    expect(a.damage).toBe(Math.max(1, UNITS.grunt.damage[0] - UNITS.brute.armor - UNIT_UPGRADES.brute.armor!));
   });
 });

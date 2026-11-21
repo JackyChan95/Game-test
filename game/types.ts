@@ -1,6 +1,6 @@
 export type Side = 'player' | 'enemy';
 export type BunkerKind = 'wall' | 'turret' | 'depot';
-export type UnitKind = 'grunt' | 'sniper' | 'brute';
+export type UnitKind = 'grunt' | 'sniper' | 'brute' | 'scout' | 'sapper' | 'medic';
 export type EventKind = 'supplyDrop' | 'blizzard' | 'mercenary' | 'sabotage' | 'calm';
 
 export interface Bunker {
@@ -59,7 +59,7 @@ export interface TurnFrame {
   round: number;
   lanes: Tile[][];
   players: Record<Side, PlayerState>;
-  /** Damage dealt in this stage, summed per target. */
+  /** Damage dealt in this stage, summed per target; negative values are Medic heals. */
   hits: Hit[];
 }
 

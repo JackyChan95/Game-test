@@ -14,7 +14,7 @@ npm run typecheck
 
 ## Rules
 
-**Map.** 3 lanes × 5 tiles. Your base is on the left, the AI's on the right, and each base has 20 HP.
+**Map.** 3 lanes × 5 tiles. Your base is on the left, the AI's on the right, and each base has 25 HP.
 A tile holds at most one bunker and any number of units. Tile control follows the front line: in each
 lane, every tile from your base up to your furthest unit or bunker is yours, and the same for the AI
 from its side. Tiles between the two fronts are neutral, so when the front units on both sides fall,
@@ -35,7 +35,8 @@ that ground goes back to neutral. Every tile starts neutral.
      a number inside the attacker's damage range (minimum 1). Attacks never overkill: once enough
      damage is assigned to destroy a target, the remaining attackers pick the next enemy. All attacks
      land at the same time, then anything at 0 HP is removed.
-   - *Movement.* Every unit then advances one tile toward the enemy base, unless it has a target in
+   - *Healing.* After the destroyed are removed, each Medic heals the wounded allies on its tile.
+   - *Movement.* Every unit then advances one tile (Scouts two) toward the enemy base, unless it has a target in
      range or the next tile holds an enemy unit or bunker. Who moves first alternates each round.
 5. **Win check.**
 
@@ -54,6 +55,9 @@ tile with one of your bunkers, as long as no enemy is there. So bunkers act as f
 | Grunt  | 3 | 6  | 2–4 | melee (1) | — |
 | Sniper | 4 | 4  | 4–5 | 2 | Shots ignore armor |
 | Brute  | 7 | 15 | 5–6 | melee (1) | Armor 1: every hit it takes is 1 lower (minimum 1) |
+| Scout  | 2 | 4  | 1–2 | melee (1) | Fast: moves 2 tiles a round |
+| Sapper | 4 | 8  | 2–3 | melee (1) | Goes for buildings, then the base, before units; +5 damage to them |
+| Medic  | 3 | 6  | none | — | After combat, heals every wounded ally on its tile by 3 (Medics stack) |
 
 The units form a rough rock-paper-scissors at equal supply (from simulated fights): Brutes beat
 Grunts (armor shrugs off small hits), a Grunt+Sniper mix beats Brutes (Snipers pierce armor from
@@ -67,6 +71,9 @@ all your units of that type, including those already on the board. Upgraded unit
 | Drill Training (Grunt) | 3 | +3 HP, damage 3–5 |
 | Long Scopes (Sniper) | 3 | Range 3 |
 | Heavy Plating (Brute) | 4 | +1 armor (armor 2) |
+| Sprint (Scout) | 3 | Moves 3 tiles a round |
+| Shaped Charges (Sapper) | 4 | +7 damage to buildings and bases |
+| Field Surgery (Medic) | 3 | Heals 4 |
 
 The Depot has no attack, so its upgrade adds income where other bunkers gain damage.
 
@@ -83,17 +90,20 @@ bases still stand after round 20, the side holding more tiles wins, and base HP 
 bases fall in the same round, the same tiles-then-HP comparison decides.
 
 **Balance notes.** The numbers were tuned with simulated games (500 per matchup). With the AI playing
-both sides, about 95% of games end with a base destroyed, at a median of round 12 (half of games end
-between rounds 9 and 14). Against a player making random moves the AI wins about 58%. An early Depot
-improves win rate by about 5%; unit upgrades are worth roughly what they cost and pay off most when
-you commit to one unit type.
+both sides, about 96% of games end with a base destroyed, at a median of round 11 (half of games end
+between rounds 9 and 13). Against a player making random moves the AI wins about 58%. An early Depot
+improves win rate by about 5%; unit upgrades are worth roughly what they cost. Each of the six units
+earns its cost: stopping the AI from training any one of them changes its win rate by at most a few
+percent (Grunts and Snipers matter most).
 
 **AI.** The AI is rule-based, and can play either side (the tests and balance simulations use this).
 Each step it picks a focus lane, which is the lane where the player's
 force (weighted toward pieces close to the AI base) most outweighs its own, and where the player holds tiles. In order, it then tries to:
-build one early Depot, defend a lane the player is pushing, keep about one bunker per three units,
+build one early Depot, defend a lane the player is pushing, keep about one bunker per five units,
 research the upgrade for the unit type it fields most (from round 4, if it can still afford a unit),
-train units (leaning on upgraded types), and upgrade bunkers. It repeats until it can't afford anything, so it spends nearly
+train units, and upgrade bunkers. Unit choice is a weighted pick that reacts to the focus lane: Sappers
+when the player has buildings there, a Medic once it has a group, Scouts mostly early, and more of
+any type it has upgraded. It repeats until it can't afford anything, so it spends nearly
 all its supply each turn.
 
 **Replays.** All randomness, including the AI's, comes from a seeded RNG stored in the game state. The same seed plus
@@ -111,7 +121,7 @@ game/                    Pure game logic, no React imports
   build.ts               Build-phase validation and actions
   income.ts              2d6 + depot income, supply cap
   events.ts              Random events
-  combat.ts              Movement, targeting, simultaneous attacks
+  combat.ts              Targeting, simultaneous attacks, healing, movement
   ai.ts                  Rule-based opponent
   engine.ts              createGame, gameReducer, checkWinner
   __tests__/             Jest tests (combat, income/events, engine)

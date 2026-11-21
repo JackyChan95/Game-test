@@ -2,7 +2,7 @@
  * Build-phase rules: validation and (mutating) application of build actions.
  * Callers should pass a cloned state; the engine does this for you.
  */
-import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNIT_UPGRADES, UNITS } from './config';
+import { BASE_COL, BUNKERS, HOME_COL, HOME_ZONE, UNIT_UPGRADES, UNITS, type UpgradeStat } from './config';
 import { inBounds, other, pushLog, SIDE, syncOwners } from './board';
 import type { BunkerKind, GameState, Side, Unit, UnitKind } from './types';
 
@@ -73,12 +73,19 @@ export function upgradeBunker(state: GameState, side: Side, lane: number, col: n
 /** A side's effective stats for a unit type, including its researched upgrade. */
 export function unitStats(state: GameState, side: Side, kind: UnitKind) {
   const base = UNITS[kind];
-  const up = state.players[side].upgrades[kind] ? UNIT_UPGRADES[kind] : null;
+  const up = state.players[side].upgrades[kind] ? UNIT_UPGRADES[kind] : {};
+  const add = (k: UpgradeStat) => (up as Partial<Record<UpgradeStat, number>>)[k] ?? 0;
+  const attacks = base.damage[1] > 0;
   return {
-    hp: base.hp + (up?.hp ?? 0),
-    damage: [base.damage[0] + (up?.damage ?? 0), base.damage[1] + (up?.damage ?? 0)] as [number, number],
-    range: base.range + (up?.range ?? 0),
-    armor: base.armor + (up?.armor ?? 0),
+    hp: base.hp + add('hp'),
+    damage: attacks
+      ? ([base.damage[0] + add('damage'), base.damage[1] + add('damage')] as [number, number])
+      : ([0, 0] as [number, number]),
+    range: base.range + add('range'),
+    armor: base.armor + add('armor'),
+    speed: base.speed + add('speed'),
+    vsStructures: base.vsStructures + add('vsStructures'),
+    heal: base.heal + add('heal'),
   };
 }
 
@@ -94,12 +101,13 @@ export function upgradeUnit(state: GameState, side: Side, kind: UnitKind) {
   const up = UNIT_UPGRADES[kind];
   state.players[side].supply -= up.cost;
   state.players[side].upgrades[kind] = true;
+  const extraHp = up.hp ?? 0;
   for (const lane of state.lanes) {
     for (const tile of lane) {
       for (const u of tile.units) {
         if (u.owner === side && u.kind === kind) {
-          u.maxHp += up.hp;
-          u.hp += up.hp;
+          u.maxHp += extraHp;
+          u.hp += extraHp;
         }
       }
     }

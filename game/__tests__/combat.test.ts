@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { applyAttacks, collectAttacks, findTarget, moveUnits, resolveClash } from '../combat';
 import { createRng } from '../rng';
-import { UNITS } from '../config';
+import { BASE_HP, UNITS } from '../config';
 import { syncOwners } from '../board';
 import { emptyGame, highRng, lowRng, putBunker, putUnit } from './helpers';
 
@@ -214,7 +214,7 @@ describe('attacks', () => {
     s.round = 1;
     resolveClash(s, highRng);
     // Only the brute already beside the base hits it; the other moves up afterwards.
-    expect(s.players.enemy.baseHp).toBe(20 - 6);
+    expect(s.players.enemy.baseHp).toBe(BASE_HP - UNITS.brute.damage[1]);
     expect(s.lanes[2][4].units).toHaveLength(1);
   });
 

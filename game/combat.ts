@@ -12,7 +12,10 @@
  * (a unit destroyed this round still gets its attack), then the destroyed are
  * removed.
  *
- * Movement: each unit then advances one tile toward the enemy base unless it
+ * Healing: after the destroyed are removed, every Medic heals the most wounded
+ * friendly unit within 1 tile.
+ *
+ * Movement: each unit then advances (Scouts 2 tiles) toward the enemy base unless it
  * has a target in range or the next tile holds an enemy (unit or bunker).
  * There is no limit on units per tile. Tile control follows the front line
  * (see syncOwners).
@@ -20,7 +23,7 @@
 import { BASE_COL, BUNKERS, COLS, DIR, UNITS } from './config';
 import { other, pushLog, syncOwners } from './board';
 import { unitStats } from './build';
-import type { GameState, Side } from './types';
+import type { GameState, Side, Unit } from './types';
 import type { Rng } from './rng';
 
 export type Target =
@@ -53,26 +56,31 @@ export interface Attack {
 export function findTarget(
   state: GameState, side: Side, lane: number, col: number, range: number, dirs: number[],
   alive: (t: Target) => boolean = () => true,
+  structuresFirst = false,
 ): Target | null {
   const foe = other(side);
+  // Sappers go for buildings, then the base, before any unit.
+  const R = structuresFirst
+    ? { bunker: 0, base: 1, meleeClose: 2, melee: 2, back: 3 }
+    : { bunker: 1, base: 4, meleeClose: 0, melee: 2, back: 3 };
   const options: { t: Target; rank: number; dist: number }[] = [];
   for (let d = 1; d <= range; d++) {
     for (const dir of dirs) {
       const c = col + dir * d;
-      if (c === BASE_COL[foe]) options.push({ t: { type: 'base', side: foe }, rank: 4, dist: d });
+      if (c === BASE_COL[foe]) options.push({ t: { type: 'base', side: foe }, rank: R.base, dist: d });
       if (c < 0 || c >= COLS) continue;
       const tile = state.lanes[lane][c];
       let sheltered = false;
       if (tile.bunker && tile.bunker.owner === foe) {
         const t: Target = { type: 'bunker', lane, col: c };
-        options.push({ t, rank: 1, dist: d });
+        options.push({ t, rank: R.bunker, dist: d });
         // Units on a building's tile can't be hit until the building is (about to be) destroyed.
         sheltered = alive(t);
       }
       for (const u of tile.units) {
         if (u.owner !== foe || sheltered) continue;
-        const melee = UNITS[u.kind].range === 1;
-        const rank = melee ? (d === 1 ? 0 : 2) : 3;
+        const melee = UNITS[u.kind].role === 'melee';
+        const rank = melee ? (d === 1 ? R.meleeClose : R.melee) : R.back;
         options.push({ t: { type: 'unit', lane, col: c, id: u.id }, rank, dist: d });
       }
     }
@@ -100,25 +108,66 @@ export function moveUnits(state: GameState, first: Side) {
   for (const side of [first, other(first)]) {
     const dir = DIR[side];
     for (let lane = 0; lane < state.lanes.length; lane++) {
-      // Front-most tiles first so units don't block their own column behind them.
-      const cols = [...Array(COLS).keys()].sort((a, b) => (b - a) * dir);
-      for (const col of cols) {
-        const tile = state.lanes[lane][col];
-        for (const unit of [...tile.units]) {
-          if (unit.owner !== side) continue;
-          if (findTarget(state, side, lane, col, unitStats(state, side, unit.kind).range, [dir])) continue;
-          const next = col + dir;
-          if (next < 0 || next >= COLS) continue;
+      // Front-most units first.
+      const movers: { unit: Unit; col: number }[] = [];
+      state.lanes[lane].forEach((tile, col) =>
+        tile.units.forEach((unit) => unit.owner === side && movers.push({ unit, col })),
+      );
+      movers.sort((a, b) => (b.col - a.col) * dir);
+      for (const m of movers) {
+        const s = unitStats(state, side, m.unit.kind);
+        for (let step = 0; step < s.speed; step++) {
+          if (findTarget(state, side, lane, m.col, s.range, [dir])) break;
+          const next = m.col + dir;
+          if (next < 0 || next >= COLS) break;
           const dest = state.lanes[lane][next];
-          if (dest.bunker && dest.bunker.owner !== side) continue;
-          if (dest.units.some((u) => u.owner !== side)) continue;
-          tile.units = tile.units.filter((u) => u.id !== unit.id);
-          dest.units.push(unit);
+          if (dest.bunker && dest.bunker.owner !== side) break;
+          if (dest.units.some((u) => u.owner !== side)) break;
+          const from = state.lanes[lane][m.col];
+          from.units = from.units.filter((u) => u.id !== m.unit.id);
+          dest.units.push(m.unit);
+          m.col = next;
         }
       }
     }
   }
   syncOwners(state);
+}
+
+/** A Medic's heal, for the log and the turn animation. */
+export interface Heal {
+  unitId: number;
+  lane: number;
+  col: number;
+  amount: number;
+}
+
+/**
+ * Every Medic heals each wounded friendly unit on its own tile (itself
+ * included), up to their max HP. Several Medics on one tile stack.
+ */
+export function applyHeals(state: GameState): Heal[] {
+  const heals: Heal[] = [];
+  state.lanes.forEach((lane, l) =>
+    lane.forEach((tile, c) => {
+      for (const medic of tile.units) {
+        const amount = unitStats(state, medic.owner, medic.kind).heal;
+        if (amount <= 0) continue;
+        let total = 0;
+        for (const u of tile.units) {
+          if (u.owner !== medic.owner || u.hp >= u.maxHp) continue;
+          const healed = Math.min(amount, u.maxHp - u.hp);
+          u.hp += healed;
+          total += healed;
+          const prev = heals.find((h) => h.unitId === u.id);
+          if (prev) prev.amount += healed;
+          else heals.push({ unitId: u.id, lane: l, col: c, amount: healed });
+        }
+        if (total > 0) pushLog(state, `${NAME(medic.owner, 'Medic')} (L${l + 1}) healed ${total} HP.`);
+      }
+    }),
+  );
+  return heals;
 }
 
 const NAME = (side: Side, name: string) => `${side === 'player' ? 'Your' : 'AI'} ${name}`;
@@ -139,8 +188,12 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
   const alive = (t: Target) => hpOf(t) - (pending.get(key(t)) ?? 0) > 0;
 
   const add = (
-    attacker: string, target: Target, [min, max]: [number, number], ranged: boolean, pierce = false,
+    attacker: string, target: Target, [lo, hi]: [number, number], ranged: boolean, pierce = false,
+    vsStructures = 0,
   ) => {
+    const bonus = target.type === 'unit' ? 0 : vsStructures;
+    const min = lo + bonus;
+    const max = hi + bonus;
     let modifier = blizzard && ranged ? -1 : 0;
     if (target.type === 'unit' && !pierce) {
       const u = state.lanes[target.lane][target.col].units.find((x) => x.id === target.id);
@@ -164,9 +217,12 @@ export function collectAttacks(state: GameState, rng: Rng, blizzard: boolean): A
       }
       for (const u of tile.units) {
         const s = unitStats(state, u.owner, u.kind);
+        if (s.damage[1] <= 0) continue; // Medics don't attack
         const from = reachFrom(state, u.owner, l, c);
-        const target = findTarget(state, u.owner, l, from, s.range, [DIR[u.owner]], alive);
-        if (target) add(`${NAME(u.owner, UNITS[u.kind].name)} (L${l + 1})`, target, s.damage, s.range >= 2, UNITS[u.kind].pierce);
+        const target = findTarget(state, u.owner, l, from, s.range, [DIR[u.owner]], alive, s.vsStructures > 0);
+        if (target) {
+          add(`${NAME(u.owner, UNITS[u.kind].name)} (L${l + 1})`, target, s.damage, s.range >= 2, UNITS[u.kind].pierce, s.vsStructures);
+        }
       }
     }),
   );
@@ -225,7 +281,7 @@ export function removeDestroyed(state: GameState) {
 }
 
 /** Called after each stage of the clash so the UI can animate it. */
-export type ClashObserver = (stage: 'move' | 'attack', attacks: Attack[]) => void;
+export type ClashObserver = (stage: 'move' | 'attack', attacks: Attack[], heals: Heal[]) => void;
 
 /** Full clash: fight, then move. Mutates state. */
 export function resolveClash(state: GameState, rng: Rng, observe?: ClashObserver) {
@@ -233,10 +289,11 @@ export function resolveClash(state: GameState, rng: Rng, observe?: ClashObserver
   const attacks = collectAttacks(state, rng, state.event === 'blizzard');
   if (attacks.length === 0) pushLog(state, 'No contact this round.');
   applyDamage(state, attacks);
-  observe?.('attack', attacks);
+  observe?.('attack', attacks, []);
   removeDestroyed(state);
+  const heals = applyHeals(state);
   // Alternate who moves first so neither side always claims contested tiles.
   const first: Side = state.round % 2 === 1 ? 'player' : 'enemy';
   moveUnits(state, first);
-  observe?.('move', []);
+  observe?.('move', [], heals);
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Bunker, Hit, PlayerState, Side, Tile, Unit, UnitKind } from '../../game';
+import { UNIT_KINDS, type Bunker, type Hit, type PlayerState, type Side, type Tile, type Unit, type UnitKind } from '../../game';
 import { C, sideColor, sideTint } from '../theme';
 import { BunkerIcon, UnitIcon } from './Icons';
 
@@ -14,25 +14,30 @@ const CHIP = 22;
 const CHIP_GAP = 3;
 const COLS = 5;
 const ROW_H = 25; // chip + HP bar
-const KIND_ORDER: UnitKind[] = ['grunt', 'sniper', 'brute'];
 
 const tileWidth = (w: number) => (w - LABEL_W - COLS * GAP) / COLS;
 const tileX = (w: number, col: number) => LABEL_W + GAP + col * (tileWidth(w) + GAP);
 const laneY = (lane: number) => lane * (TILE_H + LANE_GAP);
 
 /**
- * Units on a tile are drawn as one stack per kind. Stacks sit in rows of two
- * at the bottom of the tile; this returns the top-left of stack `index` of `count`.
+ * Units on a tile are drawn as one stack per kind, in rows at the bottom of the
+ * tile: two per row, or three smaller ones per row when there are 5–6 kinds.
+ * Returns where to place the (unscaled) sprite box for stack `index` of `count`,
+ * and its scale.
  */
 function stackPos(w: number, lane: number, col: number, index: number, count: number) {
-  const rows = Math.ceil(count / 2);
-  const row = Math.floor(index / 2);
-  const inRow = Math.min(2, count - row * 2);
-  const total = inRow * CHIP + (inRow - 1) * CHIP_GAP;
-  return {
-    x: tileX(w, col) + (tileWidth(w) - total) / 2 + (index % 2) * (CHIP + CHIP_GAP),
-    y: laneY(lane) + TILE_H - 5 - (rows - row) * ROW_H,
-  };
+  const perRow = count <= 4 ? 2 : 3;
+  const scale = count <= 4 ? 1 : 0.72;
+  const size = CHIP * scale;
+  const gap = CHIP_GAP * scale;
+  const rows = Math.ceil(count / perRow);
+  const row = Math.floor(index / perRow);
+  const inRow = Math.min(perRow, count - row * perRow);
+  const total = inRow * size + (inRow - 1) * gap;
+  const left = tileX(w, col) + (tileWidth(w) - total) / 2 + (index % perRow) * (size + gap);
+  const top = laneY(lane) + TILE_H - 5 - (rows - row) * ROW_H * scale;
+  // Scaling happens around the box's centre, so shift the unscaled box to match.
+  return { x: left - (CHIP - size) / 2, y: top - (ROW_H - ROW_H * scale) / 2, scale };
 }
 
 interface Stack {
@@ -42,7 +47,7 @@ interface Stack {
 }
 
 function stacksOf(tile: Tile): Stack[] {
-  return KIND_ORDER.map((kind) => {
+  return UNIT_KINDS.map((kind) => {
     const units = tile.units.filter((u) => u.kind === kind);
     return { kind, units, alive: units.filter((u) => u.hp > 0) };
   }).filter((s) => s.units.length > 0);
@@ -58,7 +63,7 @@ function PopIn({ children }: { children: ReactNode }) {
   return <Animated.View style={{ opacity: v, transform: [{ scale }] }}>{children}</Animated.View>;
 }
 
-/** A damage number that drifts up and fades out. */
+/** A damage number (or a green +heal) that drifts up and fades out. */
 function DamageFloat({ damage, x, y }: { damage: number; x: number; y: number }) {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -68,7 +73,7 @@ function DamageFloat({ damage, x, y }: { damage: number; x: number; y: number })
   const opacity = v.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 1, 1, 0] });
   return (
     <Animated.View pointerEvents="none" style={[styles.float, { left: x - 20, top: y - 18, opacity, transform: [{ translateY }] }]}>
-      <Text style={styles.floatText}>−{damage}</Text>
+      <Text style={[styles.floatText, damage < 0 && styles.healText]}>{damage < 0 ? `+${-damage}` : `−${damage}`}</Text>
     </Animated.View>
   );
 }
@@ -102,8 +107,8 @@ function BunkerChip({ b }: { b: Bunker }) {
  * top with the stack's count and combined HP.
  */
 function UnitSprite({
-  u, x, y, stack, upgraded,
-}: { u: Unit; x: number; y: number; stack: Stack | null; upgraded: boolean }) {
+  u, x, y, scale, stack, upgraded,
+}: { u: Unit; x: number; y: number; scale: number; stack: Stack | null; upgraded: boolean }) {
   const pos = useRef(new Animated.ValueXY({ x, y })).current;
   useEffect(() => {
     Animated.timing(pos, {
@@ -122,7 +127,7 @@ function UnitSprite({
         styles.sprite,
         { zIndex: leader ? 2 : 1 },
         hp <= 0 && styles.destroyed,
-        { transform: [{ translateX: pos.x }, { translateY: pos.y }] },
+        { transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale }] },
       ]}
     >
       <PopIn>
@@ -187,7 +192,7 @@ interface Props {
 export function Board({ lanes, players, hits, hitKey, isSpawn, selected, onSelect }: Props) {
   const [width, setWidth] = useState(0);
 
-  const sprites: { u: Unit; x: number; y: number; stack: Stack | null }[] = [];
+  const sprites: { u: Unit; x: number; y: number; scale: number; stack: Stack | null }[] = [];
   const unitAt = new Map<number, { x: number; y: number }>();
   if (width > 0) {
     lanes.forEach((lane, l) =>
@@ -257,6 +262,7 @@ export function Board({ lanes, players, hits, hitKey, isSpawn, selected, onSelec
                 u={s.u}
                 x={s.x}
                 y={s.y}
+                scale={s.scale}
                 stack={s.stack}
                 upgraded={players[s.u.owner].upgrades[s.u.kind]}
               />
@@ -354,5 +360,6 @@ const styles = StyleSheet.create({
   hpTrack: { height: 3, borderRadius: 1.5, backgroundColor: 'rgba(0,0,0,0.08)', overflow: 'hidden' },
   hpFill: { height: 3 },
   float: { position: 'absolute', width: 40, alignItems: 'center' },
+  healText: { color: C.accent },
   floatText: { fontSize: 13, fontWeight: '700', color: C.ink, textShadowColor: C.surface, textShadowRadius: 3 },
 });

@@ -4,11 +4,11 @@
  *
  * Each step it picks a focus lane (where the opponent's force most outweighs
  * its own), then tries, in order: an early Depot, a defensive bunker if the
- * opponent is pushing, a bunker to keep units/bunkers balanced, a unit, an
+ * opponent is pushing, a bunker to keep units/bunkers balanced, research, a unit, an
  * upgrade. It repeats until it can't afford anything, so it spends most of its
  * supply.
  */
-import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNIT_UPGRADES, UNITS } from './config';
+import { BASE_COL, BUNKERS, COLS, DIR, MAX_ROUNDS, UNIT_KINDS, UNIT_UPGRADES, UNITS } from './config';
 import { other } from './board';
 import {
   buildBunker, canBuildBunker, canTrainUnit, canUpgradeBunker, canUpgradeUnit, trainUnit, upgradeBunker,
@@ -112,17 +112,33 @@ function hasDefense(state: GameState, me: Side, lane: number): boolean {
   return state.lanes[lane].some((t) => t.bunker?.owner === me && t.bunker.kind !== 'depot');
 }
 
-function chooseUnit(state: GameState, me: Side, rng: Rng): UnitKind {
+/** Weighted pick of what to train, reacting to what is in the focus lane. */
+function chooseUnit(state: GameState, me: Side, lane: number, rng: Rng): UnitKind {
   const supply = state.players[me].supply;
-  const r = rng.next();
-  // Lean on a researched unit type half the time.
-  const upgraded = (['brute', 'sniper', 'grunt'] as UnitKind[]).filter(
-    (k) => state.players[me].upgrades[k] && supply >= UNITS[k].cost,
-  );
-  if (upgraded.length && r < 0.5) return upgraded[Math.floor(r * 2 * upgraded.length)];
-  const r2 = rng.next();
-  if (supply >= UNITS.brute.cost && r2 < 0.45) return 'brute';
-  if (supply >= UNITS.sniper.cost && r2 < 0.7) return 'sniper';
+  const foe = other(me);
+  const tiles = state.lanes[lane];
+  const foeBuildings = tiles.filter((t) => t.bunker?.owner === foe).length;
+  const mine = tiles.flatMap((t) => t.units.filter((u) => u.owner === me));
+  const medics = mine.filter((u) => u.kind === 'medic').length;
+  const weights: Record<UnitKind, number> = {
+    grunt: 3,
+    sniper: 2.5,
+    brute: 2.5,
+    scout: state.round <= 5 ? 1.5 : 0.5,
+    sapper: foeBuildings > 0 ? 2.5 : 0.3,
+    medic: mine.length >= 3 && medics < Math.floor(mine.length / 4) + 1 ? 2 : 0,
+  };
+  for (const k of UNIT_KINDS) {
+    if (supply < UNITS[k].cost) weights[k] = 0;
+    else if (state.players[me].upgrades[k]) weights[k] *= 2; // lean on researched types
+  }
+  const total = UNIT_KINDS.reduce((n, k) => n + weights[k], 0);
+  if (total <= 0) return 'grunt';
+  let r = rng.next() * total;
+  for (const k of UNIT_KINDS) {
+    r -= weights[k];
+    if (r < 0) return k;
+  }
   return 'grunt';
 }
 
@@ -143,8 +159,8 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
     if (tryBunker(state, me, lane, 'turret') || tryBunker(state, me, lane, 'wall')) return true;
   }
 
-  // 3. Keep a balanced mix: roughly one bunker per three units.
-  if (bunkers * 3 < units) {
+  // 3. Keep a balanced mix: roughly one bunker per five units.
+  if (bunkers * 5 < units) {
     const kind: BunkerKind = supply >= BUNKERS.turret.cost ? 'turret' : 'wall';
     if (tryBunker(state, me, lane, kind)) return true;
   }
@@ -152,7 +168,7 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
   // 4. Research the upgrade for the unit type we field most, once we have a few
   //    and can still afford a unit afterwards.
   if (state.round >= 4) {
-    const counts = { grunt: 0, sniper: 0, brute: 0 } as Record<UnitKind, number>;
+    const counts = Object.fromEntries(UNIT_KINDS.map((k) => [k, 0])) as Record<UnitKind, number>;
     for (const l of state.lanes) for (const t of l) for (const u of t.units) if (u.owner === me) counts[u.kind]++;
     const top = (Object.keys(counts) as UnitKind[]).sort((a, b) => counts[b] - counts[a])[0];
     const spare = state.players[me].supply - UNIT_UPGRADES[top].cost >= UNITS.grunt.cost;
@@ -163,7 +179,7 @@ function step(state: GameState, me: Side, rng: Rng): boolean {
   }
 
   // 5. Train a unit, focus lane first.
-  const kind = chooseUnit(state, me, rng);
+  const kind = chooseUnit(state, me, lane, rng);
   for (const l of lanesByNeed) {
     if (tryUnit(state, me, l, kind) || tryUnit(state, me, l, 'grunt')) return true;
   }
